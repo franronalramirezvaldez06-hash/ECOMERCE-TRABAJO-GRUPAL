@@ -139,8 +139,46 @@ func (s *Service) Update(ctx context.Context, id string, in UpdateInput) (Record
 	return s.repo.Update(ctx, id, in)
 }
 
-func (s *Service) List(ctx context.Context, f ListFilter) ([]Record, error) {
-	return s.repo.List(ctx, f)
+// ListItem es un producto del listado con su precio final y disponibilidad
+// (para los combos el precio se calcula a partir de sus componentes).
+type ListItem struct {
+	Record
+	Price     int64 `json:"price_cents_total"`
+	Available int   `json:"available"`
+}
+
+// List devuelve la pagina pedida con precio y disponibilidad ya calculados.
+// Hace una sola consulta de inventario para toda la pagina.
+func (s *Service) List(ctx context.Context, f ListFilter) ([]ListItem, error) {
+	recs, err := s.repo.List(ctx, f)
+	if err != nil {
+		return nil, err
+	}
+	comps := make([]Component, len(recs))
+	leafSet := map[string]struct{}{}
+	for i, rec := range recs {
+		comp, err := s.build(ctx, rec.ID, 0, true)
+		if err != nil {
+			return nil, err
+		}
+		comps[i] = comp
+		for leaf := range comp.Requirements(1) {
+			leafSet[leaf] = struct{}{}
+		}
+	}
+	ids := make([]string, 0, len(leafSet))
+	for id := range leafSet {
+		ids = append(ids, id)
+	}
+	levels, err := s.stock.Levels(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]ListItem, len(recs))
+	for i, rec := range recs {
+		out[i] = ListItem{Record: rec, Price: comps[i].Price(), Available: comps[i].Available(StockView(levels))}
+	}
+	return out, nil
 }
 
 func (s *Service) CreateCategory(ctx context.Context, name string) (Category, error) {
