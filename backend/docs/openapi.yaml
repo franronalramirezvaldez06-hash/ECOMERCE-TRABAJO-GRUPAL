@@ -1,0 +1,143 @@
+openapi: 3.0.3
+info:
+  title: Ecommerce API
+  version: 1.0.0
+  description: |
+    Backend de ecommerce (ventas, inventarios y pasarelas de pago). Montos en centavos.
+    Autenticacion: `Authorization: Bearer <token>` (obtenido en /auth/login).
+    Checkout acepta la cabecera `Idempotency-Key` para reintentos seguros.
+servers:
+  - url: http://localhost:8080
+components:
+  securitySchemes:
+    bearer:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    Error:
+      type: object
+      properties: { error: { type: string } }
+    ItemInput:
+      type: object
+      required: [product_id, quantity]
+      properties:
+        product_id: { type: string, format: uuid }
+        quantity: { type: integer, minimum: 1 }
+    Shipping:
+      type: object
+      required: [name, address, city, country]
+      properties:
+        name: { type: string }
+        address: { type: string }
+        city: { type: string }
+        country: { type: string }
+        phone: { type: string }
+    CheckoutInput:
+      type: object
+      required: [items, gateway, shipping]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/ItemInput' } }
+        coupon: { type: string }
+        gateway: { type: string, example: stripe }
+        payment_token: { type: string, example: tok_ok }
+        shipping: { $ref: '#/components/schemas/Shipping' }
+    Order:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        status: { type: string, enum: [pending, paid, failed, shipped, delivered, refunded, cancelled] }
+        subtotal_cents: { type: integer }
+        discount_cents: { type: integer }
+        shipping_cents: { type: integer }
+        tax_cents: { type: integer }
+        total_cents: { type: integer }
+        currency: { type: string }
+        items: { type: array, items: { type: object } }
+        payment: { type: object }
+  responses:
+    Unauthorized: { description: No autenticado, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+    Forbidden: { description: Requiere rol admin, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+security: []
+paths:
+  /health:
+    get: { summary: Estado del servicio y la base, responses: { '200': { description: ok } } }
+  /api/v1/auth/register:
+    post:
+      summary: Crea una cuenta de cliente
+      requestBody: { content: { application/json: { schema: { type: object, required: [email, name, password], properties: { email: { type: string }, name: { type: string }, password: { type: string, minLength: 8 } } } } } }
+      responses: { '201': { description: Usuario creado }, '400': { description: Datos invalidos }, '409': { description: Email ya registrado } }
+  /api/v1/auth/login:
+    post:
+      summary: Inicia sesion y devuelve un JWT
+      requestBody: { content: { application/json: { schema: { type: object, required: [email, password], properties: { email: { type: string }, password: { type: string } } } } } }
+      responses: { '200': { description: Token y usuario }, '401': { $ref: '#/components/responses/Unauthorized' }, '429': { description: Demasiados intentos } }
+  /api/v1/auth/me:
+    get: { summary: Usuario autenticado, security: [{ bearer: [] }], responses: { '200': { description: ok }, '401': { $ref: '#/components/responses/Unauthorized' } } }
+  /api/v1/products:
+    get:
+      summary: Lista productos activos (admin puede usar include_inactive=true)
+      parameters:
+        - { name: q, in: query, schema: { type: string } }
+        - { name: category_id, in: query, schema: { type: string, format: uuid } }
+        - { name: limit, in: query, schema: { type: integer, maximum: 200 } }
+        - { name: offset, in: query, schema: { type: integer } }
+      responses: { '200': { description: ok } }
+    post:
+      summary: "[admin] Crea producto simple"
+      security: [{ bearer: [] }]
+      responses: { '201': { description: creado }, '403': { $ref: '#/components/responses/Forbidden' }, '409': { description: SKU duplicado } }
+  /api/v1/products/{id}:
+    parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+    get: { summary: Detalle con precio, disponibilidad y arbol Composite, responses: { '200': { description: ok }, '404': { description: no existe } } }
+    put: { summary: "[admin] Edita producto o combo (parcial)", security: [{ bearer: [] }], responses: { '200': { description: ok } } }
+  /api/v1/bundles:
+    post: { summary: "[admin] Crea combo (Composite)", security: [{ bearer: [] }], responses: { '201': { description: creado } } }
+  /api/v1/categories:
+    get: { summary: Lista categorias, responses: { '200': { description: ok } } }
+    post: { summary: "[admin] Crea categoria", security: [{ bearer: [] }], responses: { '201': { description: creada } } }
+  /api/v1/inventory/low-stock:
+    get: { summary: "[admin] Productos con poco stock (threshold)", security: [{ bearer: [] }], responses: { '200': { description: ok } } }
+  /api/v1/inventory/{id}:
+    parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+    get: { summary: "[admin] Existencias", security: [{ bearer: [] }], responses: { '200': { description: ok } } }
+    put: { summary: "[admin] Fija existencias", security: [{ bearer: [] }], responses: { '200': { description: ok } } }
+  /api/v1/inventory/{id}/adjust:
+    post: { summary: "[admin] Suma o resta unidades", security: [{ bearer: [] }], responses: { '200': { description: ok }, '409': { description: dejaria stock negativo } } }
+  /api/v1/inventory/{id}/movements:
+    get: { summary: "[admin] Historial de movimientos", security: [{ bearer: [] }], responses: { '200': { description: ok } } }
+  /api/v1/coupons:
+    get: { summary: "[admin] Lista cupones", security: [{ bearer: [] }], responses: { '200': { description: ok } } }
+    post: { summary: "[admin] Crea cupon (code, discount_pct, max_uses, expires_at)", security: [{ bearer: [] }], responses: { '201': { description: creado } } }
+  /api/v1/coupons/{code}:
+    patch: { summary: "[admin] Activa o desactiva un cupon", security: [{ bearer: [] }], responses: { '200': { description: ok } } }
+  /api/v1/quotes:
+    post: { summary: Cotiza sin reservar (cadena Decorator de precios), responses: { '200': { description: desglose } } }
+  /api/v1/orders:
+    get: { summary: Ordenes propias (admin: todas), security: [{ bearer: [] }], responses: { '200': { description: ok } } }
+    post:
+      summary: Checkout
+      security: [{ bearer: [] }]
+      parameters: [{ name: Idempotency-Key, in: header, schema: { type: string } }]
+      requestBody: { content: { application/json: { schema: { $ref: '#/components/schemas/CheckoutInput' } } } }
+      responses:
+        '201': { description: Orden pagada, content: { application/json: { schema: { $ref: '#/components/schemas/Order' } } } }
+        '402': { description: Pago rechazado (stock devuelto), orden en estado failed }
+        '409': { description: Stock insuficiente }
+  /api/v1/orders/{id}:
+    get: { summary: Detalle de la orden (404 si es ajena), security: [{ bearer: [] }], parameters: [{ name: id, in: path, required: true, schema: { type: string } }], responses: { '200': { description: ok } } }
+  /api/v1/orders/{id}/cancel:
+    post: { summary: El cliente cancela su orden pagada (reembolso total), security: [{ bearer: [] }], parameters: [{ name: id, in: path, required: true, schema: { type: string } }], responses: { '200': { description: ok }, '409': { description: no esta en estado paid } } }
+  /api/v1/orders/{id}/refund:
+    post: { summary: "[admin] Reembolso total", security: [{ bearer: [] }], parameters: [{ name: id, in: path, required: true, schema: { type: string } }], responses: { '200': { description: ok }, '502': { description: la pasarela fallo } } }
+  /api/v1/orders/{id}/ship:
+    post: { summary: "[admin] paid -> shipped", security: [{ bearer: [] }], parameters: [{ name: id, in: path, required: true, schema: { type: string } }], responses: { '200': { description: ok } } }
+  /api/v1/orders/{id}/deliver:
+    post: { summary: "[admin] shipped -> delivered", security: [{ bearer: [] }], parameters: [{ name: id, in: path, required: true, schema: { type: string } }], responses: { '200': { description: ok } } }
+  /api/v1/payments/gateways:
+    get: { summary: Pasarelas disponibles, responses: { '200': { description: ok } } }
+  /api/v1/reports/sales:
+    get:
+      summary: "[admin] Resumen de ventas (from, to = YYYY-MM-DD)"
+      security: [{ bearer: [] }]
+      responses: { '200': { description: ingresos, reembolsos, por dia y top productos } }

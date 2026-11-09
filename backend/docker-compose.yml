@@ -1,0 +1,48 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: ecommerce-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-ecommerce}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ecommerce}
+      POSTGRES_DB: ${POSTGRES_DB:-ecommerce}
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-ecommerce} -d ${POSTGRES_DB:-ecommerce}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build: .
+    container_name: ecommerce-api
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      APP_ENV: ${APP_ENV:-development}
+      HTTP_PORT: "8080"
+      DATABASE_URL: postgres://${POSTGRES_USER:-ecommerce}:${POSTGRES_PASSWORD:-ecommerce}@db:5432/${POSTGRES_DB:-ecommerce}?sslmode=disable
+      JWT_SECRET: ${JWT_SECRET:-}
+      JWT_TTL_HOURS: ${JWT_TTL_HOURS:-24}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-}
+      TRUST_PROXY: ${TRUST_PROXY:-false}
+      CURRENCY: ${CURRENCY:-USD}
+      TAX_RATE_PCT: ${TAX_RATE_PCT:-19}
+      SHIPPING_CENTS: ${SHIPPING_CENTS:-500}
+      FREE_SHIPPING_OVER_CENTS: ${FREE_SHIPPING_OVER_CENTS:-10000}
+      MAX_PAYMENT_CENTS: ${MAX_PAYMENT_CENTS:-500000}
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      ENABLE_SIMULATED_GATEWAYS: ${ENABLE_SIMULATED_GATEWAYS:-}
+    ports:
+      - "${API_PORT:-8080}:8080"
+
+volumes:
+  pgdata:
