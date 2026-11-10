@@ -36,7 +36,7 @@ export default function DashboardPage() {
   const r = report.data;
   if (!r) return null;
 
-  const paidOrders = (r.orders_by_status.paid ?? 0) + (r.orders_by_status.shipped ?? 0) + (r.orders_by_status.delivered ?? 0);
+  const paidOrders = (r.orders_by_status.paid ?? 0) + (r.orders_by_status.approved ?? 0) + (r.orders_by_status.shipped ?? 0) + (r.orders_by_status.delivered ?? 0);
   const maxDaily = Math.max(1, ...r.daily.map((d) => d.revenue_cents));
 
   return (
@@ -60,7 +60,7 @@ export default function DashboardPage() {
       />
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Ingresos" value={formatMoney(r.revenue_cents)} tone="green" hint="Pagadas, enviadas y entregadas" />
+        <StatCard label="Ingresos" value={formatMoney(r.revenue_cents)} tone="green" hint="Pedidos pagados, aprobados, enviados y entregados" />
         <StatCard label="Reembolsado" value={formatMoney(r.refunded_cents)} tone={r.refunded_cents > 0 ? "red" : "default"} hint="Reembolsos y cancelaciones" />
         <StatCard label="Pedidos vendidos" value={String(paidOrders)} />
         <StatCard label="Ticket promedio" value={paidOrders ? formatMoney(Math.round(r.revenue_cents / paidOrders)) : "-"} />

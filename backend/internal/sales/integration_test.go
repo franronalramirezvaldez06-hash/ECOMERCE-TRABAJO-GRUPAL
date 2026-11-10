@@ -57,8 +57,8 @@ func setup(t *testing.T) *env {
 	inv := inventory.NewStore(pool)
 	cat := catalog.NewService(catalog.NewRepository(pool), inv)
 	coupons := coupon.NewStore(pool)
-	calc := pricing.Chain(pricing.Base{Currency: "USD"},
-		pricing.WithTax(10), pricing.WithShipping(500, 100000), pricing.WithCoupons(coupons))
+	calc := pricing.Chain(pricing.Base{Currency: "PEN"},
+		pricing.WithShipping(500, 100000), pricing.WithCoupons(coupons))
 	gws := payment.NewRegistry(payment.Decorate(payment.NewSimulated("stripe"), payment.WithRetry(3, time.Millisecond)))
 	store := sales.NewStore(pool)
 	return &env{
@@ -130,8 +130,8 @@ func TestCheckoutWithBundleDeductsLeafStockAndRefundRestoresIt(t *testing.T) {
 	if order.Status != sales.StatusPaid || order.Payment == nil || order.Payment.Status != "approved" {
 		t.Fatalf("orden inesperada: %+v", order)
 	}
-	// kit = (2000 + 2*5000) * 0.9 = 10800 ; x2 = 21600 ; envio 500 ; impuesto 10% de 21600 = 2160
-	if order.SubtotalCents != 21600 || order.TaxCents != 2160 || order.TotalCents != 21600+500+2160 {
+	// kit = (2000 + 2*5000) * 0.9 = 10800 ; x2 = 21600 ; envio 500.
+	if order.SubtotalCents != 21600 || order.TaxCents != 0 || order.TotalCents != 21600+500 {
 		t.Fatalf("totales inesperados: %+v", order)
 	}
 	if e.stock(t, mouse.ID) != 8 || e.stock(t, kb.ID) != 6 {
@@ -258,6 +258,15 @@ func TestFulfillmentFlow(t *testing.T) {
 	if _, err := e.sales.MarkDelivered(e.ctx, order.ID); err == nil {
 		t.Fatal("no se puede entregar una orden que no fue enviada")
 	}
+	if _, err := e.sales.MarkShipped(e.ctx, order.ID); !errors.Is(err, apperr.ErrConflict) {
+		t.Fatalf("no se puede enviar antes de aprobar: %v", err)
+	}
+	if o, err := e.sales.Approve(e.ctx, order.ID); err != nil || o.Status != sales.StatusApproved {
+		t.Fatalf("aprobacion: %+v %v", o, err)
+	}
+	if _, err := e.sales.Approve(e.ctx, order.ID); !errors.Is(err, apperr.ErrConflict) {
+		t.Fatalf("no se puede aprobar dos veces: %v", err)
+	}
 	if o, err := e.sales.MarkShipped(e.ctx, order.ID); err != nil || o.Status != sales.StatusShipped {
 		t.Fatalf("envio: %+v %v", o, err)
 	}
@@ -266,6 +275,56 @@ func TestFulfillmentFlow(t *testing.T) {
 	}
 	if o, err := e.sales.MarkDelivered(e.ctx, order.ID); err != nil || o.Status != sales.StatusDelivered {
 		t.Fatalf("entrega: %+v %v", o, err)
+	}
+}
+
+func TestApprovedCancellationRestoresStockCouponAndReport(t *testing.T) {
+	e := setup(t)
+	product := e.product(t, "cancelacion", 1000, 3)
+	user := e.user(t, "cancelacion")
+	code := "C" + e.suffix[len(e.suffix)-8:]
+	if _, err := e.coupons.Create(e.ctx, coupon.CreateInput{Code: code, DiscountPct: 10, MaxUses: 1}); err != nil {
+		t.Fatal(err)
+	}
+	in := params(user, "tok_ok", "", sales.ItemInput{ProductID: product.ID, Quantity: 1})
+	in.Input.Coupon = code
+	from, to := time.Now().Add(-time.Minute), time.Now().Add(time.Minute)
+	before, err := e.store.Summary(e.ctx, from, to)
+	if err != nil {
+		t.Fatal(err)
+	}
+	order, err := e.sales.Checkout(e.ctx, in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = e.sales.Approve(e.ctx, order.ID); err != nil {
+		t.Fatal(err)
+	}
+	during, err := e.store.Summary(e.ctx, from, to)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if during.RevenueCents != before.RevenueCents+order.TotalCents {
+		t.Fatal("la venta aprobada debe contar como ingreso")
+	}
+	if _, err = e.sales.Refund(e.ctx, order.ID, "error", sales.StatusCancelled); err != nil {
+		t.Fatal(err)
+	}
+	after, err := e.store.Summary(e.ctx, from, to)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if after.RevenueCents != before.RevenueCents || after.RefundedCents != before.RefundedCents+order.TotalCents {
+		t.Fatal("la cancelacion debe actualizar el resumen")
+	}
+	if e.stock(t, product.ID) != 3 {
+		t.Fatal("la cancelacion debe reponer inventario")
+	}
+	if _, err = e.coupons.Percent(e.ctx, code); err != nil {
+		t.Fatalf("debe liberar el cupon: %v", err)
+	}
+	if _, err = e.sales.Refund(e.ctx, order.ID, "otra vez", sales.StatusCancelled); !errors.Is(err, apperr.ErrConflict) {
+		t.Fatalf("cancelacion duplicada: %v", err)
 	}
 }
 
@@ -285,5 +344,31 @@ func TestAuthRegisterLogin(t *testing.T) {
 	}
 	if _, err := e.auth.Login(e.ctx, u.Email, "incorrecta"); !errors.Is(err, apperr.ErrUnauthorized) {
 		t.Fatalf("clave incorrecta debe ser 401, obtuvo %v", err)
+	}
+}
+
+func TestProductFiltersBeforePagination(t *testing.T) {
+	e := setup(t)
+	first := e.product(t, "A-"+e.suffix, 1000, 2)
+	e.product(t, "B-"+e.suffix, 1000, 0)
+	third := e.product(t, "C-"+e.suffix, 1000, 3)
+	_, err := e.cat.CreateBundle(e.ctx, catalog.CreateBundleInput{SKU: "bundle-" + e.suffix, Name: "D-" + e.suffix, Items: []catalog.BundleItem{{ComponentID: first.ID, Quantity: 1}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	f := catalog.ListFilter{Query: e.suffix, Kind: "simple", Sort: "name", InStock: true, Limit: 1}
+	page, err := e.cat.List(e.ctx, f)
+	if err != nil || len(page) != 1 || page[0].ID != first.ID {
+		t.Fatalf("primera pagina: %+v %v", page, err)
+	}
+	f.Offset = 1
+	page, err = e.cat.List(e.ctx, f)
+	if err != nil || len(page) != 1 || page[0].ID != third.ID {
+		t.Fatalf("segunda pagina debe saltar producto agotado: %+v %v", page, err)
+	}
+	f.Kind, f.Offset = "bundle", 0
+	page, err = e.cat.List(e.ctx, f)
+	if err != nil || len(page) != 1 || page[0].Kind != "bundle" {
+		t.Fatalf("filtro de combos: %+v %v", page, err)
 	}
 }

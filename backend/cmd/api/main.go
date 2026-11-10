@@ -65,11 +65,7 @@ func run(log *slog.Logger) error {
 	coupons := coupon.NewStore(pool)
 
 	// Decorator (precios): subtotal -> cupon -> envio -> impuesto.
-	calculator := pricing.Chain(pricing.Base{Currency: cfg.Currency},
-		pricing.WithTax(cfg.TaxRatePct),
-		pricing.WithShipping(cfg.ShippingCents, cfg.FreeShippingOverCents),
-		pricing.WithCoupons(coupons),
-	)
+	calculator := checkoutCalculator(cfg, coupons)
 
 	// Decorator (pasarelas): logging -> reintentos -> timeout -> limite de monto.
 	decorate := func(g payment.Gateway) payment.Gateway {
@@ -144,4 +140,11 @@ func run(log *slog.Logger) error {
 		return srv.Shutdown(shutdownCtx)
 	}
 	return nil
+}
+
+func checkoutCalculator(cfg config.Config, coupons pricing.CouponLookup) pricing.Calculator {
+	return pricing.Chain(pricing.Base{Currency: cfg.Currency},
+		pricing.WithShipping(cfg.ShippingCents, cfg.FreeShippingOverCents),
+		pricing.WithCoupons(coupons),
+	)
 }

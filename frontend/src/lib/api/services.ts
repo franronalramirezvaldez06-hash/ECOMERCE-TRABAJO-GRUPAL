@@ -18,6 +18,9 @@ import type {
 export interface ProductFilters {
   q?: string;
   category_id?: string;
+  kind?: string;
+  sort?: string;
+  in_stock?: boolean;
   include_inactive?: boolean;
   limit?: number;
   offset?: number;
@@ -118,6 +121,7 @@ export const adminApi = {
 
   refund: (id: string, reason: string) =>
     api<Order>(`/api/v1/orders/${id}/refund`, { method: "POST", body: { reason } }),
+  approve: (id: string) => api<Order>(`/api/v1/orders/${id}/approve`, { method: "POST" }),
   ship: (id: string) => api<Order>(`/api/v1/orders/${id}/ship`, { method: "POST" }),
   deliver: (id: string) => api<Order>(`/api/v1/orders/${id}/deliver`, { method: "POST" }),
 

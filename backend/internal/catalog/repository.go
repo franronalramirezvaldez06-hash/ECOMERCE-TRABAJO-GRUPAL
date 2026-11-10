@@ -40,6 +40,9 @@ type Category struct {
 type ListFilter struct {
 	Query           string
 	CategoryID      string
+	Kind            string
+	Sort            string
+	InStock         bool
 	IncludeInactive bool
 	Limit, Offset   int
 }
@@ -151,8 +154,9 @@ func (r *Repository) List(ctx context.Context, f ListFilter) ([]Record, error) {
 		 WHERE ($1::bool OR active)
 		   AND ($2 = '' OR category_id::text = $2)
 		   AND ($3 = '' OR name ILIKE '%' || $3 || '%' OR sku ILIKE '%' || $3 || '%')
-		 ORDER BY created_at DESC LIMIT $4 OFFSET $5`,
-		f.IncludeInactive, f.CategoryID, f.Query, f.Limit, f.Offset)
+		   AND ($6 = '' OR kind = $6)
+		 ORDER BY CASE WHEN $7 = 'name' THEN lower(name) END ASC, created_at DESC, id DESC LIMIT $4 OFFSET $5`,
+		f.IncludeInactive, f.CategoryID, f.Query, f.Limit, f.Offset, f.Kind, f.Sort)
 	if err != nil {
 		return nil, database.MapError(err)
 	}

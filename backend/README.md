@@ -41,7 +41,7 @@ migrations/                esquema SQL versionado, embebido en el binario
 internal/
   auth/                    usuarios, bcrypt, JWT HS256, roles admin/customer
   catalog/                 COMPOSITE: productos simples y combos + categorías
-  pricing/                 DECORATOR: subtotal -> cupón -> envío -> impuesto
+  pricing/                 DECORATOR: subtotal -> cupón -> envío
   payment/                 DECORATOR: pasarelas (Stripe real + simuladas) con logging/retry/timeout/límite
   coupon/                  cupones en BD (vigencia, usos máximos)
   inventory/               existencias, movimientos, alertas de bajo stock, reserva atómica
@@ -59,7 +59,7 @@ el compuesto (un combo puede contener productos u otros combos). `Price()`, `Ava
 recursivamente, así el checkout descuenta inventario de los productos simples sin importar el anidamiento.
 
 **Decorator** — dos usos:
-- `pricing`: `Chain(Base, WithTax, WithShipping, WithCoupons)`; cada decorador agrega su renglón al desglose.
+- `pricing`: `Chain(Base, WithShipping, WithCoupons)`; cada decorador agrega su renglón al desglose.
 - `payment`: `Decorate(pasarela, WithLogging, WithRetry, WithTimeout, WithAmountLimit)`. Una pasarela nueva solo implementa `Gateway`.
 
 ## Flujo de una venta (consistencia)
@@ -72,7 +72,7 @@ recursivamente, así el checkout descuenta inventario de los productos simples s
 
 `Idempotency-Key` en `POST /orders` hace seguros los reintentos del cliente (misma orden, sin doble cobro ni doble descuento).
 
-Ciclo de vida: `pending → paid → shipped → delivered`; `paid → refunded | cancelled` (reembolso total + stock repuesto, atómico: si la pasarela falla la orden sigue `paid`).
+Ciclo de vida: `pending → paid → approved → shipped → delivered`. El administrador aprueba después del pago; el cliente o administrador puede cancelar mientras esté pagada o aprobada y sin enviar. La cancelación reembolsa, repone inventario y libera el cupón. Los pedidos pagados o aprobados cuentan como ingreso hasta su cancelación o reembolso.
 
 ## Roles y seguridad
 

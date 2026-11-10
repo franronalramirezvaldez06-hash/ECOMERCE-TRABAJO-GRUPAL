@@ -53,7 +53,7 @@ function OrderView() {
       <OrderDetail
         order={order}
         actions={
-          order.status === "paid" && (
+          (order.status === "paid" || order.status === "approved") && (
             <Button variant="danger" size="sm" onClick={() => setConfirming(true)}>
               Cancelar pedido
             </Button>

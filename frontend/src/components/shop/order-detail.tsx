@@ -44,7 +44,7 @@ export function OrderDetail({ order, actions }: { order: Order; actions?: React.
               <Line label={`Descuento${order.coupon ? ` (${order.coupon})` : ""}`} value={`-${formatMoney(order.discount_cents, cur)}`} />
             )}
             <Line label="Envio" value={order.shipping_cents === 0 ? "Gratis" : formatMoney(order.shipping_cents, cur)} />
-            <Line label="Impuestos" value={formatMoney(order.tax_cents, cur)} />
+            {order.tax_cents > 0 && <Line label="Impuestos" value={formatMoney(order.tax_cents, cur)} />}
             <div className="flex justify-between border-t border-slate-200 pt-2 text-base font-semibold">
               <span>Total</span>
               <span>{formatMoney(order.total_cents, cur)}</span>

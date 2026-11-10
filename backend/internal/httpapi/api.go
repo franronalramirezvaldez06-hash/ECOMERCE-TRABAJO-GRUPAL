@@ -79,6 +79,7 @@ func (a *API) Router() http.Handler {
 	mux.HandleFunc("GET /api/v1/orders/{id}", user(a.getOrder))
 	mux.HandleFunc("POST /api/v1/orders/{id}/cancel", user(a.cancelOrder))
 	mux.HandleFunc("POST /api/v1/orders/{id}/refund", admin(a.refundOrder))
+	mux.HandleFunc("POST /api/v1/orders/{id}/approve", admin(a.approveOrder))
 	mux.HandleFunc("POST /api/v1/orders/{id}/ship", admin(a.shipOrder))
 	mux.HandleFunc("POST /api/v1/orders/{id}/deliver", admin(a.deliverOrder))
 

@@ -26,7 +26,7 @@ npm run build       # build de producción
 **Tienda (público / cliente)**
 - Inicio con novedades y categorías; catálogo con búsqueda (debounce), filtro por categoría y paginación en la URL.
 - Detalle de producto; los **combos muestran su árbol de componentes** y el ahorro (Composite del backend).
-- Carrito persistente (localStorage, sincronizado entre pestañas) con **cotización en vivo** del backend: descuento por cupón, envío e impuestos (Decorator del backend).
+- Carrito persistente (localStorage, sincronizado entre pestañas) con **cotización en vivo** del backend: descuento por cupón y envío, sin impuesto adicional.
 - Checkout con dirección, pasarela y medio de pago. Usa `Idempotency-Key`: un reintento por falla de red no duplica la compra; un pago rechazado (402) se informa sin perder el carrito.
 - Registro / login, pedidos propios, detalle y **cancelación con reembolso**.
 

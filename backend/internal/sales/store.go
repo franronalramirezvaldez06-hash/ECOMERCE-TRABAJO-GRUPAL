@@ -138,7 +138,7 @@ type Summary struct {
 	TopProducts   []TopProduct   `json:"top_products"`
 }
 
-const soldStates = `('paid', 'shipped', 'delivered')`
+const soldStates = `('paid', 'approved', 'shipped', 'delivered')`
 
 // Summary agrega ventas entre from (incluido) y to (excluido).
 func (s *Store) Summary(ctx context.Context, from, to time.Time) (*Summary, error) {
@@ -160,7 +160,7 @@ func (s *Store) Summary(ctx context.Context, from, to time.Time) (*Summary, erro
 		}
 		out.OrdersByState[status] = n
 		switch status {
-		case StatusPaid, StatusShipped, StatusDelivered:
+		case StatusPaid, StatusApproved, StatusShipped, StatusDelivered:
 			out.RevenueCents += total
 		case StatusRefunded, StatusCancelled:
 			out.RefundedCents += total

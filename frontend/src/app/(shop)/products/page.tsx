@@ -26,6 +26,9 @@ function ProductsView() {
   const params = useSearchParams();
 
   const category = params.get("category") ?? "";
+  const kind = params.get("kind") ?? "";
+  const inStock = params.get("stock") === "true";
+  const sort = params.get("sort") ?? "newest";
   const page = Math.max(0, Number(params.get("page") ?? 0) || 0);
   const urlQuery = params.get("q") ?? "";
 
@@ -49,9 +52,9 @@ function ProductsView() {
 
   const categories = useQuery({ queryKey: ["categories"], queryFn: catalogApi.categories });
   const products = useQuery({
-    queryKey: ["products", { q: urlQuery, category, page }],
+    queryKey: ["products", { q: urlQuery, category, kind, inStock, sort, page }],
     queryFn: () =>
-      catalogApi.list({ q: urlQuery, category_id: category, limit: PAGE_SIZE + 1, offset: page * PAGE_SIZE }),
+      catalogApi.list({ q: urlQuery, category_id: category, kind, in_stock: inStock, sort, limit: PAGE_SIZE + 1, offset: page * PAGE_SIZE }),
     placeholderData: keepPreviousData,
   });
 
@@ -87,6 +90,29 @@ function ProductsView() {
             </option>
           ))}
         </select>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-3" aria-label="Filtros de productos">
+        <select value={kind} onChange={(e) => update({ kind: e.target.value || null, page: null })}
+          aria-label="Filtrar por tipo" className="h-10 rounded-lg border border-slate-300 bg-white px-3 text-sm">
+          <option value="">Todos los tipos</option>
+          <option value="simple">Productos individuales</option>
+          <option value="bundle">Combos</option>
+        </select>
+        <select value={sort} onChange={(e) => update({ sort: e.target.value === "newest" ? null : e.target.value, page: null })}
+          aria-label="Ordenar productos" className="h-10 rounded-lg border border-slate-300 bg-white px-3 text-sm">
+          <option value="newest">Más recientes</option>
+          <option value="name">Nombre A–Z</option>
+        </select>
+        <label className="flex items-center gap-2 text-sm text-slate-700">
+          <input type="checkbox" checked={inStock} onChange={(e) => update({ stock: e.target.checked ? "true" : null, page: null })} />
+          Solo disponibles
+        </label>
+        {(category || kind || inStock || sort !== "newest" || urlQuery) && (
+          <button type="button" className="text-sm font-medium text-brand-700" onClick={() => { setSearch(""); router.replace(pathname, { scroll: false }); }}>
+            Limpiar filtros
+          </button>
+        )}
       </div>
 
       {products.isLoading ? (

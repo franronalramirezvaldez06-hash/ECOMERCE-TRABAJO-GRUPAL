@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { centsToInput, parseMoneyToCents } from "./format";
+import { centsToInput, formatMoney, parseMoneyToCents } from "./format";
+
+describe("formatMoney", () => {
+  it("muestra soles por defecto y respeta la moneda de pedidos anteriores", () => {
+    expect(formatMoney(1250)).toMatch(/^S\/\s?12\.50$/);
+    expect(formatMoney(1250, "USD")).toContain("12.50");
+    expect(formatMoney(1250, "USD")).not.toContain("S/");
+  });
+});
 
 describe("parseMoneyToCents", () => {
   it("convierte formatos validos", () => {

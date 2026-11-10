@@ -1,8 +1,8 @@
 import type { OrderStatus } from "./api/types";
 
 /** Formatea centavos como moneda (el backend siempre trabaja en centavos). */
-export function formatMoney(cents: number, currency = "USD"): string {
-  return new Intl.NumberFormat("es-CO", {
+export function formatMoney(cents: number, currency = "PEN"): string {
+  return new Intl.NumberFormat("es-PE", {
     style: "currency",
     currency,
     minimumFractionDigits: 2,
@@ -26,7 +26,8 @@ export function formatDate(iso: string): string {
 
 export const STATUS_LABELS: Record<OrderStatus, string> = {
   pending: "Pendiente",
-  paid: "Pagada",
+  paid: "Pagada · pendiente de aprobación",
+  approved: "Aprobada",
   failed: "Pago fallido",
   shipped: "Enviada",
   delivered: "Entregada",
@@ -36,7 +37,8 @@ export const STATUS_LABELS: Record<OrderStatus, string> = {
 
 export const STATUS_TONES: Record<OrderStatus, "gray" | "green" | "red" | "blue" | "amber" | "purple"> = {
   pending: "amber",
-  paid: "green",
+  paid: "amber",
+  approved: "green",
   failed: "red",
   shipped: "blue",
   delivered: "purple",

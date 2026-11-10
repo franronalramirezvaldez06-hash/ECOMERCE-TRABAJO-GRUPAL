@@ -25,7 +25,7 @@ export default function AdminOrdersPage() {
 
   return (
     <>
-      <PageHeader title="Pedidos" description="Gestiona el cumplimiento: enviar, entregar o reembolsar." />
+      <PageHeader title="Pedidos" description="Aprueba, cancela y gestiona la entrega de los pedidos." />
       <select
         value={status}
         onChange={(e) => {

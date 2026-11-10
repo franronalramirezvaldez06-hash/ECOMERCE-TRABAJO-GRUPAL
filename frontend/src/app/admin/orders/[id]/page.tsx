@@ -19,6 +19,7 @@ export default function AdminOrderPage() {
   const toast = useToast();
   const queryClient = useQueryClient();
   const [refunding, setRefunding] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
   const [reason, setReason] = useState("");
 
   const query = useQuery({ queryKey: ["order", id], queryFn: () => salesApi.order(id) });
@@ -33,6 +34,12 @@ export default function AdminOrderPage() {
   const onError = (e: unknown) => toast.error(errorMessage(e));
 
   const ship = useMutation({ mutationFn: () => adminApi.ship(id), onSuccess: onDone("Pedido marcado como enviado"), onError });
+  const approve = useMutation({ mutationFn: () => adminApi.approve(id), onSuccess: onDone("Pedido aprobado"), onError });
+  const cancel = useMutation({
+    mutationFn: () => salesApi.cancel(id),
+    onSuccess: (o) => { onDone("Pedido cancelado y reembolsado; inventario repuesto")(o); setCancelling(false); },
+    onError,
+  });
   const deliver = useMutation({ mutationFn: () => adminApi.deliver(id), onSuccess: onDone("Pedido marcado como entregado"), onError });
   const refund = useMutation({
     mutationFn: () => adminApi.refund(id, reason.trim()),
@@ -61,9 +68,19 @@ export default function AdminOrderPage() {
         actions={
           <div className="flex gap-2">
             {order.status === "paid" && (
+              <Button size="sm" onClick={() => approve.mutate()} loading={approve.isPending}>
+                <PackageCheck className="h-4 w-4" aria-hidden /> Aprobar pedido
+              </Button>
+            )}
+            {order.status === "approved" && (
+              <Button size="sm" onClick={() => ship.mutate()} loading={ship.isPending}>
+                <Truck className="h-4 w-4" aria-hidden /> Marcar enviado
+              </Button>
+            )}
+            {(order.status === "paid" || order.status === "approved") && (
               <>
-                <Button size="sm" onClick={() => ship.mutate()} loading={ship.isPending}>
-                  <Truck className="h-4 w-4" aria-hidden /> Marcar enviado
+                <Button size="sm" variant="danger" onClick={() => setCancelling(true)}>
+                  Cancelar pedido
                 </Button>
                 <Button size="sm" variant="danger" onClick={() => setRefunding(true)}>
                   <Undo2 className="h-4 w-4" aria-hidden /> Reembolsar
@@ -78,6 +95,14 @@ export default function AdminOrderPage() {
           </div>
         }
       />
+
+      <Modal open={cancelling} title="Cancelar pedido" onClose={() => setCancelling(false)}>
+        <p className="mb-4 text-sm text-slate-600">Se reembolsará el pago, se repondrá el inventario y el pedido dejará de contar como ingreso.</p>
+        <div className="flex justify-end gap-2">
+          <Button variant="secondary" onClick={() => setCancelling(false)}>Volver</Button>
+          <Button variant="danger" onClick={() => cancel.mutate()} loading={cancel.isPending}>Confirmar cancelación</Button>
+        </div>
+      </Modal>
 
       <Modal open={refunding} title="Reembolsar pedido" onClose={() => setRefunding(false)}>
         <p className="mb-4 text-sm text-slate-600">

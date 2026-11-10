@@ -75,6 +75,7 @@ export interface Quote {
 export type OrderStatus =
   | "pending"
   | "paid"
+  | "approved"
   | "failed"
   | "shipped"
   | "delivered"

@@ -51,9 +51,20 @@ func isAdmin(r *http.Request) bool {
 func (a *API) listProducts(w http.ResponseWriter, r *http.Request) {
 	limit, offset := paging(r)
 	q := r.URL.Query()
+	if k := q.Get("kind"); k != "" && k != "simple" && k != "bundle" {
+		a.writeError(w, apperr.Validation("tipo de producto invalido"))
+		return
+	}
+	if sort := q.Get("sort"); sort != "" && sort != "newest" && sort != "name" {
+		a.writeError(w, apperr.Validation("orden invalido"))
+		return
+	}
 	recs, err := a.Catalog.List(r.Context(), catalog.ListFilter{
 		Query:           q.Get("q"),
 		CategoryID:      q.Get("category_id"),
+		Kind:            q.Get("kind"),
+		Sort:            q.Get("sort"),
+		InStock:         q.Get("in_stock") == "true",
 		IncludeInactive: q.Get("include_inactive") == "true" && isAdmin(r),
 		Limit:           limit,
 		Offset:          offset,
@@ -263,7 +274,11 @@ func (a *API) cancelOrder(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	o, err := a.Sales.Refund(r.Context(), order.ID, "cancelada por el cliente", sales.StatusCancelled)
+	reason := "cancelada por el cliente"
+	if isAdmin(r) {
+		reason = "cancelada por el administrador"
+	}
+	o, err := a.Sales.Refund(r.Context(), order.ID, reason, sales.StatusCancelled)
 	respond(a, w, http.StatusOK, o, err)
 }
 
@@ -283,6 +298,11 @@ func (a *API) refundOrder(w http.ResponseWriter, r *http.Request) {
 
 func (a *API) shipOrder(w http.ResponseWriter, r *http.Request) {
 	o, err := a.Sales.MarkShipped(r.Context(), r.PathValue("id"))
+	respond(a, w, http.StatusOK, o, err)
+}
+
+func (a *API) approveOrder(w http.ResponseWriter, r *http.Request) {
+	o, err := a.Sales.Approve(r.Context(), r.PathValue("id"))
 	respond(a, w, http.StatusOK, o, err)
 }
 

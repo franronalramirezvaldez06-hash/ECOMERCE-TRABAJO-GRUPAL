@@ -80,7 +80,7 @@ function CheckoutForm() {
       dispatch({ type: "clear" });
       queryClient.invalidateQueries({ queryKey: ["products"] });
       queryClient.invalidateQueries({ queryKey: ["orders"] });
-      toast.success("Compra realizada con exito");
+      toast.success("Pago realizado. Tu pedido está pendiente de aprobación.");
       router.push(`/orders/${order.id}`);
     } catch (err) {
       if (err instanceof ApiError && err.status === 402) {

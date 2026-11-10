@@ -46,7 +46,7 @@ components:
       type: object
       properties:
         id: { type: string, format: uuid }
-        status: { type: string, enum: [pending, paid, failed, shipped, delivered, refunded, cancelled] }
+        status: { type: string, enum: [pending, paid, approved, failed, shipped, delivered, refunded, cancelled] }
         subtotal_cents: { type: integer }
         discount_cents: { type: integer }
         shipping_cents: { type: integer }
@@ -80,6 +80,9 @@ paths:
       parameters:
         - { name: q, in: query, schema: { type: string } }
         - { name: category_id, in: query, schema: { type: string, format: uuid } }
+        - { name: kind, in: query, schema: { type: string, enum: [simple, bundle] } }
+        - { name: in_stock, in: query, schema: { type: boolean } }
+        - { name: sort, in: query, schema: { type: string, enum: [newest, name] } }
         - { name: limit, in: query, schema: { type: integer, maximum: 200 } }
         - { name: offset, in: query, schema: { type: integer } }
       responses: { '200': { description: ok } }
@@ -127,11 +130,13 @@ paths:
   /api/v1/orders/{id}:
     get: { summary: Detalle de la orden (404 si es ajena), security: [{ bearer: [] }], parameters: [{ name: id, in: path, required: true, schema: { type: string } }], responses: { '200': { description: ok } } }
   /api/v1/orders/{id}/cancel:
-    post: { summary: El cliente cancela su orden pagada (reembolso total), security: [{ bearer: [] }], parameters: [{ name: id, in: path, required: true, schema: { type: string } }], responses: { '200': { description: ok }, '409': { description: no esta en estado paid } } }
+    post: { summary: El cliente o administrador cancela una orden pagada o aprobada sin enviar (reembolso total), security: [{ bearer: [] }], parameters: [{ name: id, in: path, required: true, schema: { type: string } }], responses: { '200': { description: ok }, '409': { description: estado no cancelable } } }
+  /api/v1/orders/{id}/approve:
+    post: { summary: "[admin] paid -> approved", security: [{ bearer: [] }], parameters: [{ name: id, in: path, required: true, schema: { type: string } }], responses: { '200': { description: ok }, '409': { description: la orden no esta pagada } } }
   /api/v1/orders/{id}/refund:
     post: { summary: "[admin] Reembolso total", security: [{ bearer: [] }], parameters: [{ name: id, in: path, required: true, schema: { type: string } }], responses: { '200': { description: ok }, '502': { description: la pasarela fallo } } }
   /api/v1/orders/{id}/ship:
-    post: { summary: "[admin] paid -> shipped", security: [{ bearer: [] }], parameters: [{ name: id, in: path, required: true, schema: { type: string } }], responses: { '200': { description: ok } } }
+    post: { summary: "[admin] approved -> shipped", security: [{ bearer: [] }], parameters: [{ name: id, in: path, required: true, schema: { type: string } }], responses: { '200': { description: ok } } }
   /api/v1/orders/{id}/deliver:
     post: { summary: "[admin] shipped -> delivered", security: [{ bearer: [] }], parameters: [{ name: id, in: path, required: true, schema: { type: string } }], responses: { '200': { description: ok } } }
   /api/v1/payments/gateways:

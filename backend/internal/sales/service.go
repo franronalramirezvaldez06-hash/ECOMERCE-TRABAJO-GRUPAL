@@ -261,14 +261,14 @@ func (s *Service) Refund(ctx context.Context, orderID, reason, finalStatus strin
 
 	var total int64
 	err = tx.QueryRow(ctx,
-		`UPDATE orders SET status = $2, updated_at = now() WHERE id = $1::uuid AND status = 'paid' RETURNING total_cents`,
+		`UPDATE orders SET status = $2, updated_at = now() WHERE id = $1::uuid AND status IN ('paid', 'approved') RETURNING total_cents`,
 		orderID, finalStatus).Scan(&total)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			if _, getErr := s.store.Get(ctx, orderID); getErr != nil {
 				return nil, getErr
 			}
-			return nil, fmt.Errorf("%w: solo se pueden reembolsar o cancelar ordenes en estado paid", apperr.ErrConflict)
+			return nil, fmt.Errorf("%w: solo se pueden reembolsar o cancelar ordenes pagadas o aprobadas sin enviar", apperr.ErrConflict)
 		}
 		return nil, database.MapError(err)
 	}
@@ -317,15 +317,27 @@ func (s *Service) Refund(ctx context.Context, orderID, reason, finalStatus strin
 			return nil, err
 		}
 	}
+	if _, err := tx.Exec(ctx, `UPDATE coupons SET used_count = GREATEST(used_count - 1, 0)
+		WHERE code = (SELECT NULLIF(coupon, '') FROM orders WHERE id = $1::uuid)`, orderID); err != nil {
+		return nil, database.MapError(err)
+	}
 	if err := tx.Commit(ctx); err != nil {
 		return nil, database.MapError(err)
 	}
 	return s.store.Get(ctx, orderID)
 }
 
-// MarkShipped y MarkDelivered avanzan el cumplimiento de una orden pagada.
+// Approve requiere una orden pagada y no vuelve a cobrar al cliente.
+func (s *Service) Approve(ctx context.Context, orderID string) (*Order, error) {
+	if err := s.store.UpdateStatus(ctx, orderID, StatusPaid, StatusApproved); err != nil {
+		return nil, err
+	}
+	return s.store.Get(ctx, orderID)
+}
+
+// MarkShipped y MarkDelivered avanzan el cumplimiento de una orden aprobada.
 func (s *Service) MarkShipped(ctx context.Context, orderID string) (*Order, error) {
-	if err := s.store.UpdateStatus(ctx, orderID, StatusPaid, StatusShipped); err != nil {
+	if err := s.store.UpdateStatus(ctx, orderID, StatusApproved, StatusShipped); err != nil {
 		return nil, err
 	}
 	return s.store.Get(ctx, orderID)

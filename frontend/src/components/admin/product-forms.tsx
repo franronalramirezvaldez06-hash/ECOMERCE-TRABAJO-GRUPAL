@@ -6,7 +6,7 @@ import { Plus, Trash2 } from "lucide-react";
 import { adminApi, catalogApi } from "@/lib/api/services";
 import { errorMessage } from "@/lib/api/client";
 import type { Category, Product } from "@/lib/api/types";
-import { centsToInput, parseMoneyToCents } from "@/lib/format";
+import { centsToInput, formatMoney, parseMoneyToCents } from "@/lib/format";
 import { useToast } from "@/providers/toast-provider";
 import { Button } from "@/components/ui/button";
 import { SelectField, TextAreaField, TextField } from "@/components/ui/form";
@@ -110,7 +110,7 @@ export function ProductModal({ open, product, onClose }: { open: boolean; produc
           {isBundle ? (
             <TextField label="Descuento del combo (%)" type="number" min={0} max={100} value={form.discount} onChange={set("discount")} />
           ) : (
-            <TextField label="Precio" inputMode="decimal" value={form.price} onChange={set("price")} required placeholder="12.50" />
+            <TextField label="Precio (S/)" inputMode="decimal" value={form.price} onChange={set("price")} required placeholder="12.50" />
           )}
           {!editing && <TextField label="Stock inicial" type="number" min={0} value={form.stock} onChange={set("stock")} />}
           <CategorySelect value={form.category} onChange={(v) => setForm((f) => ({ ...f, category: v }))} categories={categories.data} />
@@ -257,8 +257,8 @@ export function BundleModal({ open, onClose }: { open: boolean; onClose: () => v
         </fieldset>
 
         <p className="rounded-lg bg-slate-50 p-3 text-sm text-slate-600">
-          Suma de componentes: <strong>${(total / 100).toFixed(2)}</strong> &rarr; precio del combo con descuento:{" "}
-          <strong>${(discounted / 100).toFixed(2)}</strong>
+          Suma de componentes: <strong>{formatMoney(total)}</strong> &rarr; precio del combo con descuento:{" "}
+          <strong>{formatMoney(discounted)}</strong>
         </p>
         <FormError message={error} />
         <div className="flex justify-end gap-2 pt-2">

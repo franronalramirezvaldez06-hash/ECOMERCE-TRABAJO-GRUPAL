@@ -1,0 +1,14 @@
+// Empaqueta los archivos modificados del proyecto para transferirlos a la instancia.
+const fs = require('fs');
+const cp = require('child_process');
+const zlib = require('zlib');
+const path = require('path');
+const root = path.resolve(__dirname, '..');
+const changed = cp.execFileSync('git', ['diff', '--name-only', '--', 'backend', 'frontend'], { cwd: root, encoding: 'utf8' }).trim().split(/\r?\n/).filter(Boolean);
+const added = ['backend/cmd/api/main_test.go', 'backend/go.sum', 'backend/internal/config/config_test.go', 'backend/migrations/003_aprobacion_pedidos.sql'];
+const files = Object.fromEntries([...new Set([...changed, ...added])].map(name => [name, fs.readFileSync(path.join(root, name), 'utf8').replace(/\r\n/g, '\n')]));
+const data = zlib.gzipSync(Buffer.from(JSON.stringify(files)), { level: 9 }).toString('base64');
+const py = `import json, subprocess, time\ndata = '${data}'\ninstance = 'i-0c2f22ade05c0e040'\ndef run(cmd):\n    request = {'DocumentName':'AWS-RunShellScript','InstanceIds':[instance], 'Parameters':{'commands':[cmd]},'TimeoutSeconds':600}\n    result = subprocess.check_output(['aws','ssm','send-command','--region','us-east-1','--cli-input-json',json.dumps(request),'--query','Command.CommandId','--output','text'], text=True).strip()\n    for _ in range(180):\n        time.sleep(2)\n        p = subprocess.run(['aws','ssm','get-command-invocation','--region','us-east-1','--command-id',result,'--instance-id',instance,'--output','json'],capture_output=True,text=True)\n        if p.returncode: continue\n        response = json.loads(p.stdout); status = response['Status']\n        if status == 'Success': return response.get('StandardOutputContent','')\n        if status not in ('Pending','InProgress','Delayed'): raise RuntimeError(status + ': ' + response.get('StandardErrorContent',''))\n    raise TimeoutError(result)\nrun('set -e; test ! -e /opt/ecommerce/staged; git clone --no-hardlinks /opt/ecommerce/source /opt/ecommerce/staged; : > /tmp/ecommerce-payload.b64')\nfor i in range(0,len(data),5000):\n    run(\"printf '%s' '\" + data[i:i+5000] + \"' >> /tmp/ecommerce-payload.b64\")\n    print('Transferido',min(i+5000,len(data)),'de',len(data),flush=True)\ncmd = \"python3 -c 'import base64,gzip,json,pathlib; data=json.loads(gzip.decompress(base64.b64decode(pathlib.Path(\\\"/tmp/ecommerce-payload.b64\\\").read_text()))); root=pathlib.Path(\\\"/opt/ecommerce/staged\\\"); [(root.joinpath(k).parent.mkdir(parents=True,exist_ok=True),root.joinpath(k).write_text(v)) for k,v in data.items()]; print(\\\"Archivos transferidos:\\\",len(data))'\"\nprint(run(cmd),flush=True)\n`;
+const output = path.join(root, 'deploy', 'ship-update.py');
+fs.writeFileSync(output, py);
+console.log(`Paquete: ${Object.keys(files).length} archivos; contenido comprimido: ${data.length} caracteres`);

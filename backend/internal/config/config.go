@@ -3,7 +3,6 @@ package config
 
 import (
 	"errors"
-	"fmt"
 	"os"
 	"strconv"
 	"strings"
@@ -18,7 +17,6 @@ type Config struct {
 	DatabaseURL string
 	Currency    string
 
-	TaxRatePct            float64
 	ShippingCents         int64
 	FreeShippingOverCents int64
 	MaxPaymentCents       int64
@@ -47,8 +45,7 @@ func Load() (Config, error) {
 		Env:                     map[bool]string{true: "production", false: "development"}[prod],
 		HTTPPort:                env("HTTP_PORT", "8080"),
 		DatabaseURL:             env("DATABASE_URL", "postgres://ecommerce:ecommerce@localhost:5432/ecommerce?sslmode=disable"),
-		Currency:                strings.ToUpper(env("CURRENCY", "USD")),
-		TaxRatePct:              envFloat("TAX_RATE_PCT", 19),
+		Currency:                strings.ToUpper(env("CURRENCY", "PEN")),
 		ShippingCents:           envInt("SHIPPING_CENTS", 500),
 		FreeShippingOverCents:   envInt("FREE_SHIPPING_OVER_CENTS", 10000),
 		MaxPaymentCents:         envInt("MAX_PAYMENT_CENTS", 500000),
@@ -99,9 +96,6 @@ func (c Config) validate() error {
 	}
 	if c.AdminEmail != "" && len(c.AdminPassword) < 10 {
 		errs = append(errs, errors.New("ADMIN_PASSWORD debe tener al menos 10 caracteres"))
-	}
-	if c.TaxRatePct < 0 || c.TaxRatePct > 100 {
-		errs = append(errs, fmt.Errorf("TAX_RATE_PCT fuera de rango: %v", c.TaxRatePct))
 	}
 	return errors.Join(errs...)
 }

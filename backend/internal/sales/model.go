@@ -11,12 +11,13 @@ import (
 
 // Ciclo de vida de una orden:
 //
-//	pending -> paid -> shipped -> delivered
+//	pending -> paid -> approved -> shipped -> delivered
 //	pending -> failed                 (pago rechazado, stock devuelto)
 //	paid    -> refunded | cancelled   (reembolso por admin / cancelacion del cliente)
 const (
 	StatusPending   = "pending"
 	StatusPaid      = "paid"
+	StatusApproved  = "approved"
 	StatusFailed    = "failed"
 	StatusShipped   = "shipped"
 	StatusDelivered = "delivered"

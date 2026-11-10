@@ -150,6 +150,36 @@ type ListItem struct {
 // List devuelve la pagina pedida con precio y disponibilidad ya calculados.
 // Hace una sola consulta de inventario para toda la pagina.
 func (s *Service) List(ctx context.Context, f ListFilter) ([]ListItem, error) {
+	if f.InStock {
+		// Aplicar el filtro antes de paginar, incluso para combos anidados.
+		wanted, skip := f.Limit, f.Offset
+		f.InStock, f.Limit, f.Offset = false, 100, 0
+		out := make([]ListItem, 0, wanted)
+		for len(out) < wanted {
+			page, err := s.List(ctx, f)
+			if err != nil {
+				return nil, err
+			}
+			for _, item := range page {
+				if item.Available <= 0 {
+					continue
+				}
+				if skip > 0 {
+					skip--
+					continue
+				}
+				out = append(out, item)
+				if len(out) == wanted {
+					break
+				}
+			}
+			if len(page) < f.Limit {
+				break
+			}
+			f.Offset += f.Limit
+		}
+		return out, nil
+	}
 	recs, err := s.repo.List(ctx, f)
 	if err != nil {
 		return nil, err
