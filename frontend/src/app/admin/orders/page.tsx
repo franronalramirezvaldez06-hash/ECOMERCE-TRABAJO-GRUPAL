@@ -7,7 +7,9 @@ import { salesApi } from "@/lib/api/services";
 import { errorMessage } from "@/lib/api/client";
 import type { OrderStatus } from "@/lib/api/types";
 import { formatDate, formatMoney, STATUS_LABELS } from "@/lib/format";
-import { EmptyState, ErrorState, PageLoader, Pagination } from "@/components/ui/misc";
+import { Pagination } from "@/components/ui/pagination";
+import { PageLoader } from "@/components/ui/spinner";
+import { EmptyState, ErrorState } from "@/components/ui/states";
 import { PageHeader, Table, td } from "@/components/admin/admin-ui";
 import { OrderStatusBadge } from "@/components/shop/order-status-badge";
 

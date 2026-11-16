@@ -4,7 +4,7 @@ import { useEffect, type ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { ShieldAlert } from "lucide-react";
 import { useAuth } from "@/providers/auth-provider";
-import { PageLoader } from "@/components/ui/misc";
+import { PageLoader } from "@/components/ui/spinner";
 import { LinkButton } from "@/components/ui/button";
 
 /** Redirige a /login (recordando la ruta) si no hay sesion. */

@@ -16,7 +16,7 @@ func (a *API) quote(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	b, err := a.Sales.Quote(r.Context(), in)
-	respond(a, w, http.StatusOK, b, err)
+	a.ok(w, b, err)
 }
 
 func (a *API) checkout(w http.ResponseWriter, r *http.Request) {
@@ -51,8 +51,10 @@ func (a *API) listOrders(w http.ResponseWriter, r *http.Request) {
 		userID = r.URL.Query().Get("user_id")
 	}
 	limit, offset := paging(r)
-	orders, err := a.Orders.List(r.Context(), userID, r.URL.Query().Get("status"), limit, offset)
-	respond(a, w, http.StatusOK, orders, err)
+	orders, err := a.Orders.List(r.Context(), sales.ListFilter{
+		UserID: userID, Status: r.URL.Query().Get("status"), Limit: limit, Offset: offset,
+	})
+	a.ok(w, orders, err)
 }
 
 // ownedOrder carga la orden y oculta (404) las ajenas a un cliente.
@@ -87,7 +89,7 @@ func (a *API) cancelOrder(w http.ResponseWriter, r *http.Request) {
 		reason = "cancelada por el administrador"
 	}
 	o, err := a.Sales.Refund(r.Context(), order.ID, reason, sales.StatusCancelled)
-	respond(a, w, http.StatusOK, o, err)
+	a.ok(w, o, err)
 }
 
 func (a *API) refundOrder(w http.ResponseWriter, r *http.Request) {
@@ -101,22 +103,22 @@ func (a *API) refundOrder(w http.ResponseWriter, r *http.Request) {
 		in.Reason = "reembolso por administrador"
 	}
 	o, err := a.Sales.Refund(r.Context(), r.PathValue("id"), in.Reason, sales.StatusRefunded)
-	respond(a, w, http.StatusOK, o, err)
+	a.ok(w, o, err)
 }
 
 func (a *API) shipOrder(w http.ResponseWriter, r *http.Request) {
 	o, err := a.Sales.MarkShipped(r.Context(), r.PathValue("id"))
-	respond(a, w, http.StatusOK, o, err)
+	a.ok(w, o, err)
 }
 
 func (a *API) approveOrder(w http.ResponseWriter, r *http.Request) {
 	o, err := a.Sales.Approve(r.Context(), r.PathValue("id"))
-	respond(a, w, http.StatusOK, o, err)
+	a.ok(w, o, err)
 }
 
 func (a *API) deliverOrder(w http.ResponseWriter, r *http.Request) {
 	o, err := a.Sales.MarkDelivered(r.Context(), r.PathValue("id"))
-	respond(a, w, http.StatusOK, o, err)
+	a.ok(w, o, err)
 }
 
 func (a *API) listGateways(w http.ResponseWriter, _ *http.Request) {

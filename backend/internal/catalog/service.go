@@ -139,78 +139,6 @@ func (s *Service) Update(ctx context.Context, id string, in UpdateInput) (Record
 	return s.repo.Update(ctx, id, in)
 }
 
-// ListItem es un producto del listado con su precio final y disponibilidad
-// (para los combos el precio se calcula a partir de sus componentes).
-type ListItem struct {
-	Record
-	Price     int64 `json:"price_cents_total"`
-	Available int   `json:"available"`
-}
-
-// List devuelve la pagina pedida con precio y disponibilidad ya calculados.
-// Hace una sola consulta de inventario para toda la pagina.
-func (s *Service) List(ctx context.Context, f ListFilter) ([]ListItem, error) {
-	if f.InStock {
-		// Aplicar el filtro antes de paginar, incluso para combos anidados.
-		wanted, skip := f.Limit, f.Offset
-		f.InStock, f.Limit, f.Offset = false, 100, 0
-		out := make([]ListItem, 0, wanted)
-		for len(out) < wanted {
-			page, err := s.List(ctx, f)
-			if err != nil {
-				return nil, err
-			}
-			for _, item := range page {
-				if item.Available <= 0 {
-					continue
-				}
-				if skip > 0 {
-					skip--
-					continue
-				}
-				out = append(out, item)
-				if len(out) == wanted {
-					break
-				}
-			}
-			if len(page) < f.Limit {
-				break
-			}
-			f.Offset += f.Limit
-		}
-		return out, nil
-	}
-	recs, err := s.repo.List(ctx, f)
-	if err != nil {
-		return nil, err
-	}
-	comps := make([]Component, len(recs))
-	leafSet := map[string]struct{}{}
-	for i, rec := range recs {
-		comp, err := s.build(ctx, rec.ID, 0, true)
-		if err != nil {
-			return nil, err
-		}
-		comps[i] = comp
-		for leaf := range comp.Requirements(1) {
-			leafSet[leaf] = struct{}{}
-		}
-	}
-	ids := make([]string, 0, len(leafSet))
-	for id := range leafSet {
-		ids = append(ids, id)
-	}
-	levels, err := s.stock.Levels(ctx, ids)
-	if err != nil {
-		return nil, err
-	}
-	out := make([]ListItem, len(recs))
-	for i, rec := range recs {
-		out[i] = ListItem{Record: rec, Price: comps[i].Price(), Available: comps[i].Available(StockView(levels))}
-	}
-	return out, nil
-}
-
 func (s *Service) CreateCategory(ctx context.Context, name string) (Category, error) {
 	name = strings.TrimSpace(name)
 	if name == "" {
@@ -222,6 +150,8 @@ func (s *Service) CreateCategory(ctx context.Context, name string) (Category, er
 func (s *Service) ListCategories(ctx context.Context) ([]Category, error) {
 	return s.repo.ListCategories(ctx)
 }
+
+func (r Record) info() Info { return Info{id: r.ID, sku: r.SKU, name: r.Name} }
 
 // Build arma el arbol Composite de un producto leyendo la base de datos.
 // Rechaza productos inactivos (se usa al vender).
@@ -241,9 +171,9 @@ func (s *Service) build(ctx context.Context, id string, depth int, allowInactive
 		return nil, apperr.Validation("el producto %q no esta disponible para la venta", rec.Name)
 	}
 	if rec.Kind == KindSimple {
-		return NewSimple(rec.ID, rec.SKU, rec.Name, rec.PriceCents), nil
+		return NewSimple(rec.info(), rec.PriceCents), nil
 	}
-	bundle, err := NewBundle(rec.ID, rec.SKU, rec.Name, rec.BundleDiscountPct)
+	bundle, err := NewBundle(rec.info(), rec.BundleDiscountPct)
 	if err != nil {
 		return nil, err
 	}

@@ -39,7 +39,7 @@ flujo envío/entrega y registro/login.
 cmd/api/main.go            composición de dependencias y arranque (graceful shutdown)
 migrations/                esquema SQL versionado, embebido en el binario
 internal/
-  auth/                    usuarios, bcrypt, JWT HS256, roles admin/customer
+  auth/                    usuarios (service + repository), bcrypt, JWT HS256, roles admin/customer
   catalog/                 COMPOSITE: productos simples y combos + categorías
   pricing/                 DECORATOR: subtotal -> cupón -> envío
   payment/                 DECORATOR: pasarelas (Stripe real + simuladas) con logging/retry/timeout/límite
@@ -90,7 +90,7 @@ En `APP_ENV=production` la configuración se valida al arrancar (JWT_SECRET ≥ 
 
 - **Stripe real:** define `STRIPE_SECRET_KEY` (usa `sk_test_...` para pruebas). El `payment_token` es el id de un PaymentMethod creado en el frontend con Stripe.js (`pm_...`; para probar: `pm_card_visa`, `pm_card_chargeDeclined`).
 - **Simuladas** (`stripe`, `paypal`, `mercadopago`; no cobran): activas por defecto solo en desarrollo. Tokens: `tok_ok`, `tok_declined`, `tok_flaky` (falla 2 veces y reintenta), `tok_slow` (timeout).
-- PayPal y MercadoPago reales no están implementados; agregarlos = implementar `payment.Gateway` y registrarlos en `main.go`.
+- PayPal y MercadoPago reales no están implementados; agregarlos = implementar `payment.Gateway` y registrarlos en `newGateways` (`cmd/api/main.go`).
 
 ## Ejemplo
 

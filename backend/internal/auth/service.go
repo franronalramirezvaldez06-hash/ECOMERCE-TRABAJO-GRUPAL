@@ -1,73 +1,30 @@
 package auth
 
+// Logica de negocio de autenticacion: registro, login y validacion de tokens.
+
 import (
 	"context"
 	"errors"
 	"fmt"
 	"net/mail"
 	"strings"
-	"time"
 
 	"ecommerce/internal/apperr"
-	"ecommerce/internal/platform/database"
 
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"golang.org/x/crypto/bcrypt"
 )
-
-type User struct {
-	ID        string    `json:"id"`
-	Email     string    `json:"email"`
-	Name      string    `json:"name"`
-	Role      string    `json:"role"`
-	Active    bool      `json:"active"`
-	CreatedAt time.Time `json:"created_at"`
-}
-
-// Principal es la identidad autenticada de una peticion.
-type Principal struct {
-	UserID string
-	Email  string
-	Role   string
-}
-
-func (p Principal) IsAdmin() bool { return p.Role == RoleAdmin }
-
-type ctxKey struct{}
-
-func WithPrincipal(ctx context.Context, p Principal) context.Context {
-	return context.WithValue(ctx, ctxKey{}, p)
-}
-
-func FromContext(ctx context.Context) (Principal, bool) {
-	p, ok := ctx.Value(ctxKey{}).(Principal)
-	return p, ok
-}
-
-type RegisterInput struct {
-	Email    string `json:"email"`
-	Name     string `json:"name"`
-	Password string `json:"password"`
-}
-
-type LoginResult struct {
-	Token     string    `json:"token"`
-	ExpiresAt time.Time `json:"expires_at"`
-	User      User      `json:"user"`
-}
 
 // dummyHash se compara cuando el email no existe, para que login tarde igual
 // y no revele que cuentas existen.
 var dummyHash, _ = bcrypt.GenerateFromPassword([]byte("dummy-password-for-timing"), bcrypt.DefaultCost)
 
 type Service struct {
-	pool   *pgxpool.Pool
+	users  *Repository
 	tokens *TokenManager
 }
 
-func NewService(pool *pgxpool.Pool, tokens *TokenManager) *Service {
-	return &Service{pool: pool, tokens: tokens}
+func NewService(users *Repository, tokens *TokenManager) *Service {
+	return &Service{users: users, tokens: tokens}
 }
 
 func validatePassword(p string) error {
@@ -89,14 +46,6 @@ func normalizeEmail(e string) (string, error) {
 	return e, nil
 }
 
-const userColumns = `id::text, email, name, role, active, created_at`
-
-func scanUser(row pgx.Row) (User, error) {
-	var u User
-	err := row.Scan(&u.ID, &u.Email, &u.Name, &u.Role, &u.Active, &u.CreatedAt)
-	return u, database.MapError(err)
-}
-
 // Register crea una cuenta de cliente.
 func (s *Service) Register(ctx context.Context, in RegisterInput) (User, error) {
 	email, err := normalizeEmail(in.Email)
@@ -110,17 +59,17 @@ func (s *Service) Register(ctx context.Context, in RegisterInput) (User, error) 
 	if err := validatePassword(in.Password); err != nil {
 		return User{}, err
 	}
-	return s.insert(ctx, email, name, in.Password, RoleCustomer)
+	return s.create(ctx, newUser{Email: email, Name: name, Role: RoleCustomer}, in.Password)
 }
 
-func (s *Service) insert(ctx context.Context, email, name, password, role string) (User, error) {
+// create hashea la contrasena y guarda el usuario.
+func (s *Service) create(ctx context.Context, n newUser, password string) (User, error) {
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
 		return User{}, err
 	}
-	u, err := scanUser(s.pool.QueryRow(ctx,
-		`INSERT INTO users (email, password_hash, name, role) VALUES ($1, $2, $3, $4) RETURNING `+userColumns,
-		email, string(hash), name, role))
+	n.PasswordHash = string(hash)
+	u, err := s.users.Insert(ctx, n)
 	if errors.Is(err, apperr.ErrConflict) {
 		return User{}, fmt.Errorf("%w: el email ya esta registrado", apperr.ErrConflict)
 	}
@@ -132,16 +81,12 @@ func (s *Service) Login(ctx context.Context, email, password string) (LoginResul
 	fail := fmt.Errorf("%w: credenciales invalidas", apperr.ErrUnauthorized)
 	email = strings.ToLower(strings.TrimSpace(email))
 
-	var u User
-	var hash string
-	err := s.pool.QueryRow(ctx,
-		`SELECT `+userColumns+`, password_hash FROM users WHERE email = $1`, email).
-		Scan(&u.ID, &u.Email, &u.Name, &u.Role, &u.Active, &u.CreatedAt, &hash)
+	u, hash, err := s.users.GetByEmail(ctx, email)
+	if errors.Is(err, apperr.ErrNotFound) {
+		_ = bcrypt.CompareHashAndPassword(dummyHash, []byte(password))
+		return LoginResult{}, fail
+	}
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			_ = bcrypt.CompareHashAndPassword(dummyHash, []byte(password))
-			return LoginResult{}, fail
-		}
 		return LoginResult{}, err
 	}
 	if bcrypt.CompareHashAndPassword([]byte(hash), []byte(password)) != nil || !u.Active {
@@ -160,18 +105,16 @@ func (s *Service) Authenticate(ctx context.Context, token string) (Principal, er
 	if err != nil {
 		return Principal{}, err
 	}
-	var active bool
-	var role string
-	err = s.pool.QueryRow(ctx, `SELECT active, role FROM users WHERE id = $1::uuid`, p.UserID).Scan(&active, &role)
-	if err != nil || !active {
+	u, err := s.users.Get(ctx, p.UserID)
+	if err != nil || !u.Active {
 		return Principal{}, fmt.Errorf("%w: usuario no disponible", apperr.ErrUnauthorized)
 	}
-	p.Role = role // el rol vigente en BD manda sobre el del token
+	p.Role = u.Role // el rol vigente en BD manda sobre el del token
 	return p, nil
 }
 
 func (s *Service) Get(ctx context.Context, id string) (User, error) {
-	return scanUser(s.pool.QueryRow(ctx, `SELECT `+userColumns+` FROM users WHERE id = $1::uuid`, id))
+	return s.users.Get(ctx, id)
 }
 
 // EnsureAdmin crea el administrador inicial si todavia no existe.
@@ -180,13 +123,10 @@ func (s *Service) EnsureAdmin(ctx context.Context, email, password string) (crea
 	if err != nil {
 		return false, err
 	}
-	var exists bool
-	if err := s.pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM users WHERE email = $1)`, email).Scan(&exists); err != nil {
+	exists, err := s.users.ExistsByEmail(ctx, email)
+	if err != nil || exists {
 		return false, err
 	}
-	if exists {
-		return false, nil
-	}
-	_, err = s.insert(ctx, email, "Administrador", password, RoleAdmin)
+	_, err = s.create(ctx, newUser{Email: email, Name: "Administrador", Role: RoleAdmin}, password)
 	return err == nil, err
 }

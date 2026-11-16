@@ -60,25 +60,35 @@ func Load() (Config, error) {
 		EnableSimulatedGateways: envBool("ENABLE_SIMULATED_GATEWAYS", !prod),
 	}
 
-	origins := os.Getenv("ALLOWED_ORIGINS")
-	if origins == "" && !prod {
-		origins = "*"
-	}
-	for _, o := range strings.Split(origins, ",") {
-		if o = strings.TrimSpace(o); o != "" {
-			c.AllowedOrigins = append(c.AllowedOrigins, o)
-		}
-	}
-
+	c.AllowedOrigins = allowedOrigins(prod)
 	if !prod {
-		if c.JWTSecret == "" {
-			c.JWTSecret = devJWTSecret
-		}
-		if c.AdminEmail == "" {
-			c.AdminEmail, c.AdminPassword = "admin@ecommerce.local", "Admin12345!"
-		}
+		c.applyDevDefaults()
 	}
 	return c, c.validate()
+}
+
+// allowedOrigins lee la lista blanca de CORS; en desarrollo permite cualquier origen.
+func allowedOrigins(prod bool) []string {
+	raw := os.Getenv("ALLOWED_ORIGINS")
+	if raw == "" && !prod {
+		raw = "*"
+	}
+	var origins []string
+	for _, o := range strings.Split(raw, ",") {
+		if o = strings.TrimSpace(o); o != "" {
+			origins = append(origins, o)
+		}
+	}
+	return origins
+}
+
+func (c *Config) applyDevDefaults() {
+	if c.JWTSecret == "" {
+		c.JWTSecret = devJWTSecret
+	}
+	if c.AdminEmail == "" {
+		c.AdminEmail, c.AdminPassword = "admin@ecommerce.local", "Admin12345!"
+	}
 }
 
 func (c Config) validate() error {

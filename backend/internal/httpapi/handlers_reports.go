@@ -34,5 +34,5 @@ func (a *API) salesReport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s, err := a.Orders.Summary(r.Context(), from, to)
-	respond(a, w, http.StatusOK, s, err)
+	a.ok(w, s, err)
 }

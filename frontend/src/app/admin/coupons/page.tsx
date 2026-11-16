@@ -9,7 +9,10 @@ import { formatDate } from "@/lib/format";
 import { useToast } from "@/providers/toast-provider";
 import { Button } from "@/components/ui/button";
 import { TextField } from "@/components/ui/form";
-import { Badge, EmptyState, ErrorState, Modal, PageLoader } from "@/components/ui/misc";
+import { Badge } from "@/components/ui/badge";
+import { Modal } from "@/components/ui/modal";
+import { PageLoader } from "@/components/ui/spinner";
+import { EmptyState, ErrorState } from "@/components/ui/states";
 import { PageHeader, Table, td } from "@/components/admin/admin-ui";
 
 function CouponModal({ onClose }: { onClose: () => void }) {

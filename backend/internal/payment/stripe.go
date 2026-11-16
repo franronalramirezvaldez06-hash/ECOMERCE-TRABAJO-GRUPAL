@@ -60,7 +60,7 @@ func (s *Stripe) Charge(ctx context.Context, req ChargeRequest) (ChargeResult, e
 	}
 
 	var intent stripeIntent
-	if err := s.post(ctx, "/v1/payment_intents", form, "charge-"+req.Reference, &intent); err != nil {
+	if err := s.post(ctx, stripeCall{path: "/v1/payment_intents", form: form, idempotencyKey: "charge-" + req.Reference}, &intent); err != nil {
 		return ChargeResult{}, err
 	}
 	if intent.Status != "succeeded" {
@@ -76,17 +76,24 @@ func (s *Stripe) Refund(ctx context.Context, externalRef string, amountCents int
 	var out struct {
 		ID string `json:"id"`
 	}
-	return s.post(ctx, "/v1/refunds", form, "refund-"+externalRef, &out)
+	return s.post(ctx, stripeCall{path: "/v1/refunds", form: form, idempotencyKey: "refund-" + externalRef}, &out)
 }
 
-func (s *Stripe) post(ctx context.Context, path string, form url.Values, idempotencyKey string, out any) error {
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, s.baseURL+path, strings.NewReader(form.Encode()))
+// stripeCall describe una peticion POST a la API de Stripe.
+type stripeCall struct {
+	path           string
+	form           url.Values
+	idempotencyKey string
+}
+
+func (s *Stripe) post(ctx context.Context, call stripeCall, out any) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, s.baseURL+call.path, strings.NewReader(call.form.Encode()))
 	if err != nil {
 		return err
 	}
 	req.Header.Set("Authorization", "Bearer "+s.secretKey)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Set("Idempotency-Key", idempotencyKey)
+	req.Header.Set("Idempotency-Key", call.idempotencyKey)
 
 	resp, err := s.client.Do(req)
 	if err != nil {
@@ -98,6 +105,12 @@ func (s *Stripe) post(ctx context.Context, path string, form url.Values, idempot
 	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
 		return json.Unmarshal(body, out)
 	}
+	return stripeError(resp, body)
+}
+
+// stripeError clasifica una respuesta de error: temporal (reintentable),
+// rechazo de la tarjeta u otro fallo.
+func stripeError(resp *http.Response, body []byte) error {
 	var e stripeErrorBody
 	_ = json.Unmarshal(body, &e)
 	msg := e.Error.Message

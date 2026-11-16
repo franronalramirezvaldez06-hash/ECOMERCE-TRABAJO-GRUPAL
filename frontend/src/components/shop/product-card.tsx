@@ -6,7 +6,7 @@ import type { ProductListItem } from "@/lib/api/types";
 import { formatMoney } from "@/lib/format";
 import { useCart } from "@/providers/cart-provider";
 import { useToast } from "@/providers/toast-provider";
-import { Badge } from "@/components/ui/misc";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ProductImage } from "./product-image";
 

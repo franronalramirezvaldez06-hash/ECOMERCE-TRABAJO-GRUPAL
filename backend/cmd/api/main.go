@@ -21,6 +21,8 @@ import (
 	"ecommerce/internal/platform/database"
 	"ecommerce/internal/pricing"
 	"ecommerce/internal/sales"
+
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 func main() {
@@ -47,27 +49,71 @@ func run(log *slog.Logger) error {
 	if err := database.Migrate(ctx, pool, log); err != nil {
 		return err
 	}
-
-	authSvc := auth.NewService(pool, auth.NewTokenManager(cfg.JWTSecret, cfg.JWTTTL))
-	if cfg.AdminEmail != "" {
-		created, err := authSvc.EnsureAdmin(ctx, cfg.AdminEmail, cfg.AdminPassword)
-		if err != nil {
-			return err
-		}
-		if created {
-			log.Info("administrador inicial creado", "email", cfg.AdminEmail)
-		}
-	}
 	if !cfg.IsProduction() {
 		log.Warn("modo desarrollo: no uses esta configuracion en produccion", "env", cfg.Env)
 	}
+	api, err := newAPI(ctx, app{cfg: cfg, pool: pool, log: log})
+	if err != nil {
+		return err
+	}
+	return serve(ctx, newServer(cfg, api.Router()), log)
+}
 
+// app agrupa la infraestructura ya inicializada que necesitan los modulos.
+type app struct {
+	cfg  config.Config
+	pool *pgxpool.Pool
+	log  *slog.Logger
+}
+
+// newAPI es la raiz de composicion: crea cada modulo y le inyecta sus dependencias.
+func newAPI(ctx context.Context, a app) (*httpapi.API, error) {
+	cfg, pool, log := a.cfg, a.pool, a.log
+	authSvc := auth.NewService(auth.NewRepository(pool), auth.NewTokenManager(cfg.JWTSecret, cfg.JWTTTL))
+	if err := ensureAdmin(ctx, authSvc, a); err != nil {
+		return nil, err
+	}
 	coupons := coupon.NewStore(pool)
+	gateways := newGateways(cfg, log)
+	inv := inventory.NewStore(pool)
+	cat := catalog.NewService(catalog.NewRepository(pool), inv)
+	orders := sales.NewStore(pool)
+	salesSvc := sales.NewService(sales.Deps{
+		Store: orders, Catalog: cat, Calculator: checkoutCalculator(cfg, coupons), Gateways: gateways, Log: log,
+	})
+	return &httpapi.API{
+		Auth:      authSvc,
+		Catalog:   cat,
+		Inventory: inv,
+		Coupons:   coupons,
+		Sales:     salesSvc,
+		Orders:    orders,
+		Gateways:  gateways,
+		Ping:      pool.Ping,
+		Log:       log,
+		Options: httpapi.Options{
+			AllowedOrigins: cfg.AllowedOrigins,
+			TrustProxy:     cfg.TrustProxy,
+			RateLimitRPS:   cfg.RateLimitRPS,
+			RateLimitBurst: cfg.RateLimitBurst,
+		},
+	}, nil
+}
 
-	// Decorator (precios): subtotal -> cupon -> envio -> impuesto.
-	calculator := checkoutCalculator(cfg, coupons)
+func ensureAdmin(ctx context.Context, authSvc *auth.Service, a app) error {
+	if a.cfg.AdminEmail == "" {
+		return nil
+	}
+	created, err := authSvc.EnsureAdmin(ctx, a.cfg.AdminEmail, a.cfg.AdminPassword)
+	if created {
+		a.log.Info("administrador inicial creado", "email", a.cfg.AdminEmail)
+	}
+	return err
+}
 
-	// Decorator (pasarelas): logging -> reintentos -> timeout -> limite de monto.
+// newGateways registra las pasarelas disponibles, cada una envuelta con los
+// decoradores: logging -> reintentos -> timeout -> limite de monto.
+func newGateways(cfg config.Config, log *slog.Logger) *payment.Registry {
 	decorate := func(g payment.Gateway) payment.Gateway {
 		return payment.Decorate(g,
 			payment.WithLogging(log),
@@ -91,40 +137,26 @@ func run(log *slog.Logger) error {
 		}
 		log.Warn("pasarelas SIMULADAS habilitadas (no cobran dinero real)")
 	}
-	gateways := payment.NewRegistry(gws...)
+	return payment.NewRegistry(gws...)
+}
 
-	inv := inventory.NewStore(pool)
-	cat := catalog.NewService(catalog.NewRepository(pool), inv)
-	orders := sales.NewStore(pool)
-	api := &httpapi.API{
-		Auth:      authSvc,
-		Catalog:   cat,
-		Inventory: inv,
-		Coupons:   coupons,
-		Sales:     sales.NewService(pool, orders, cat, calculator, gateways, log),
-		Orders:    orders,
-		Gateways:  gateways,
-		Ping:      pool.Ping,
-		Log:       log,
-		Options: httpapi.Options{
-			AllowedOrigins: cfg.AllowedOrigins,
-			TrustProxy:     cfg.TrustProxy,
-			RateLimitRPS:   cfg.RateLimitRPS,
-			RateLimitBurst: cfg.RateLimitBurst,
-		},
-	}
-
-	srv := &http.Server{
+func newServer(cfg config.Config, handler http.Handler) *http.Server {
+	return &http.Server{
 		Addr:              ":" + cfg.HTTPPort,
-		Handler:           api.Router(),
+		Handler:           handler,
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
 		WriteTimeout:      45 * time.Second, // checkout incluye cobro con reintentos
 		IdleTimeout:       60 * time.Second,
 	}
+}
+
+// serve atiende peticiones hasta que el servidor falle o llegue una senal de
+// apagado; en ese caso espera a que terminen las peticiones en curso.
+func serve(ctx context.Context, srv *http.Server, log *slog.Logger) error {
 	errCh := make(chan error, 1)
 	go func() {
-		log.Info("servidor escuchando", "addr", srv.Addr, "env", cfg.Env)
+		log.Info("servidor escuchando", "addr", srv.Addr)
 		errCh <- srv.ListenAndServe()
 	}()
 
@@ -142,6 +174,7 @@ func run(log *slog.Logger) error {
 	return nil
 }
 
+// Decorator (precios): subtotal -> cupon -> envio.
 func checkoutCalculator(cfg config.Config, coupons pricing.CouponLookup) pricing.Calculator {
 	return pricing.Chain(pricing.Base{Currency: cfg.Currency},
 		pricing.WithShipping(cfg.ShippingCents, cfg.FreeShippingOverCents),

@@ -63,8 +63,8 @@ func setup(t *testing.T) *env {
 	store := sales.NewStore(pool)
 	return &env{
 		ctx: ctx, cat: cat, inv: inv, coupons: coupons, store: store,
-		sales:  sales.NewService(pool, store, cat, calc, gws, log),
-		auth:   auth.NewService(pool, auth.NewTokenManager("test-secret-test-secret-test-secret-123", time.Hour)),
+		sales:  sales.NewService(sales.Deps{Store: store, Catalog: cat, Calculator: calc, Gateways: gws, Log: log}),
+		auth:   auth.NewService(auth.NewRepository(pool), auth.NewTokenManager("test-secret-test-secret-test-secret-123", time.Hour)),
 		suffix: fmt.Sprintf("%d", time.Now().UnixNano()),
 	}
 }

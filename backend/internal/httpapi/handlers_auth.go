@@ -14,7 +14,7 @@ func (a *API) register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	u, err := a.Auth.Register(r.Context(), in)
-	respond(a, w, http.StatusCreated, u, err)
+	a.created(w, u, err)
 }
 
 func (a *API) login(w http.ResponseWriter, r *http.Request) {
@@ -26,11 +26,11 @@ func (a *API) login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	res, err := a.Auth.Login(r.Context(), in.Email, in.Password)
-	respond(a, w, http.StatusOK, res, err)
+	a.ok(w, res, err)
 }
 
 func (a *API) me(w http.ResponseWriter, r *http.Request) {
 	p, _ := auth.FromContext(r.Context())
 	u, err := a.Auth.Get(r.Context(), p.UserID)
-	respond(a, w, http.StatusOK, u, err)
+	a.ok(w, u, err)
 }

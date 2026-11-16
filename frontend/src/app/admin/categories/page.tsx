@@ -8,7 +8,9 @@ import { formatDate } from "@/lib/format";
 import { useToast } from "@/providers/toast-provider";
 import { Button } from "@/components/ui/button";
 import { TextField } from "@/components/ui/form";
-import { Card, EmptyState, ErrorState, PageLoader } from "@/components/ui/misc";
+import { Card } from "@/components/ui/card";
+import { PageLoader } from "@/components/ui/spinner";
+import { EmptyState, ErrorState } from "@/components/ui/states";
 import { PageHeader } from "@/components/admin/admin-ui";
 
 export default function CategoriesPage() {

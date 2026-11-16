@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useState, type ChangeEvent, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { errorMessage } from "@/lib/api/client";
@@ -8,16 +8,17 @@ import { useAuth } from "@/providers/auth-provider";
 import { Button } from "@/components/ui/button";
 import { TextField } from "@/components/ui/form";
 
-export default function RegisterPage() {
+const EMPTY = { name: "", email: "", password: "", confirm: "" };
+
+/** Estado, validacion y envio del formulario de registro. */
+function useRegisterForm() {
   const router = useRouter();
   const { register } = useAuth();
-  const [form, setForm] = useState({ name: "", email: "", password: "", confirm: "" });
+  const [form, setForm] = useState(EMPTY);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const set = (field: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) =>
-    setForm((f) => ({ ...f, [field]: e.target.value }));
-
+  const bind = (field: keyof typeof EMPTY) => (e: ChangeEvent<HTMLInputElement>) => setForm((f) => ({ ...f, [field]: e.target.value }));
   const mismatch = form.confirm !== "" && form.confirm !== form.password;
   const tooShort = form.password !== "" && form.password.length < 8;
 
@@ -35,31 +36,21 @@ export default function RegisterPage() {
     }
   };
 
+  return { form, bind, mismatch, tooShort, error, loading, submit };
+}
+
+export default function RegisterPage() {
+  const { form, bind, mismatch, tooShort, error, loading, submit } = useRegisterForm();
+  const password = { type: "password", required: true, autoComplete: "new-password" } as const;
+
   return (
     <>
       <h1 className="text-2xl font-bold">Crear cuenta</h1>
       <form onSubmit={submit} className="mt-6 space-y-4">
-        <TextField label="Nombre" value={form.name} onChange={set("name")} required autoComplete="name" />
-        <TextField label="Correo electronico" type="email" value={form.email} onChange={set("email")} required autoComplete="email" />
-        <TextField
-          label="Contrasena"
-          type="password"
-          value={form.password}
-          onChange={set("password")}
-          required
-          autoComplete="new-password"
-          error={tooShort ? "Minimo 8 caracteres" : undefined}
-          hint="Minimo 8 caracteres"
-        />
-        <TextField
-          label="Confirmar contrasena"
-          type="password"
-          value={form.confirm}
-          onChange={set("confirm")}
-          required
-          autoComplete="new-password"
-          error={mismatch ? "Las contrasenas no coinciden" : undefined}
-        />
+        <TextField label="Nombre" value={form.name} onChange={bind("name")} required autoComplete="name" />
+        <TextField label="Correo electronico" type="email" value={form.email} onChange={bind("email")} required autoComplete="email" />
+        <TextField label="Contrasena" {...password} value={form.password} onChange={bind("password")} error={tooShort ? "Minimo 8 caracteres" : undefined} hint="Minimo 8 caracteres" />
+        <TextField label="Confirmar contrasena" {...password} value={form.confirm} onChange={bind("confirm")} error={mismatch ? "Las contrasenas no coinciden" : undefined} />
         {error && (
           <p role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-700">
             {error}

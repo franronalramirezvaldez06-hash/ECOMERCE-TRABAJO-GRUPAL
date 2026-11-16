@@ -8,7 +8,10 @@ import { errorMessage } from "@/lib/api/client";
 import { formatDate, formatMoney } from "@/lib/format";
 import { RequireAuth } from "@/components/auth/guards";
 import { LinkButton } from "@/components/ui/button";
-import { Card, EmptyState, ErrorState, PageLoader, Pagination } from "@/components/ui/misc";
+import { Card } from "@/components/ui/card";
+import { Pagination } from "@/components/ui/pagination";
+import { PageLoader } from "@/components/ui/spinner";
+import { EmptyState, ErrorState } from "@/components/ui/states";
 import { OrderStatusBadge } from "@/components/shop/order-status-badge";
 
 const PAGE_SIZE = 10;

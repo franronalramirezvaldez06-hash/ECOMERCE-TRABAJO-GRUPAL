@@ -1,0 +1,10 @@
+# Sistema operativo / editores
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# Secretos locales
+.env
+.env.local

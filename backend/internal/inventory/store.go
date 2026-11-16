@@ -106,33 +106,40 @@ func (s *Store) Set(ctx context.Context, productID string, quantity int) (int, e
 	return s.Adjust(ctx, productID, quantity-current, "ajuste_conteo")
 }
 
+// StockMove es una reserva o devolucion de unidades ligada a una orden.
+type StockMove struct {
+	ProductID string
+	Quantity  int
+	OrderRef  string
+}
+
 // Reserve descuenta stock de forma atomica (usar dentro de una transaccion).
-func Reserve(ctx context.Context, db DBTX, productID string, qty int, orderRef string) error {
+func Reserve(ctx context.Context, db DBTX, m StockMove) error {
 	tag, err := db.Exec(ctx,
 		`UPDATE inventory SET quantity = quantity - $2, updated_at = now()
-		 WHERE product_id = $1::uuid AND quantity >= $2`, productID, qty)
+		 WHERE product_id = $1::uuid AND quantity >= $2`, m.ProductID, m.Quantity)
 	if err != nil {
 		return database.MapError(err)
 	}
 	if tag.RowsAffected() == 0 {
-		return fmt.Errorf("%w: producto %s", apperr.ErrInsufficientStock, productID)
+		return fmt.Errorf("%w: producto %s", apperr.ErrInsufficientStock, m.ProductID)
 	}
 	_, err = db.Exec(ctx,
 		`INSERT INTO inventory_movements (product_id, delta, reason, reference) VALUES ($1::uuid, $2, 'venta', $3)`,
-		productID, -qty, orderRef)
+		m.ProductID, -m.Quantity, m.OrderRef)
 	return database.MapError(err)
 }
 
 // Release devuelve stock reservado (compensacion cuando falla el pago).
-func Release(ctx context.Context, db DBTX, productID string, qty int, orderRef string) error {
+func Release(ctx context.Context, db DBTX, m StockMove) error {
 	if _, err := db.Exec(ctx,
 		`UPDATE inventory SET quantity = quantity + $2, updated_at = now() WHERE product_id = $1::uuid`,
-		productID, qty); err != nil {
+		m.ProductID, m.Quantity); err != nil {
 		return database.MapError(err)
 	}
 	_, err := db.Exec(ctx,
 		`INSERT INTO inventory_movements (product_id, delta, reason, reference) VALUES ($1::uuid, $2, 'venta_revertida', $3)`,
-		productID, qty, orderRef)
+		m.ProductID, m.Quantity, m.OrderRef)
 	return database.MapError(err)
 }
 

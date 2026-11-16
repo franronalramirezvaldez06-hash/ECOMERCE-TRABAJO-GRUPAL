@@ -5,7 +5,7 @@ import { salesApi } from "@/lib/api/services";
 import { errorMessage } from "@/lib/api/client";
 import { formatMoney } from "@/lib/format";
 import { useCart } from "@/providers/cart-provider";
-import { Spinner } from "@/components/ui/misc";
+import { Spinner } from "@/components/ui/spinner";
 
 /** Cotizacion en vivo: el backend calcula descuento y envio. */
 export function useQuote() {

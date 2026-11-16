@@ -43,15 +43,19 @@ npm run build       # build de producción
 src/
   app/                  rutas (App Router): (shop), (auth) y admin con su propio layout
   components/
-    ui/                 Button, formularios accesibles, Modal, Badge, Pagination...
-    shop/ admin/        componentes de cada área
+    ui/                 un componente por archivo: button, form, modal, badge, card, pagination, spinner, states
+    shop/               tienda; checkout/ y cart/ agrupan los subcomponentes y hooks de cada pantalla
+    admin/              panel; products/, inventory/, orders/ y dashboard/ por pantalla
     auth/guards.tsx     RequireAuth / RequireAdmin
   providers/            sesión (JWT), carrito, notificaciones, React Query
   lib/
     api/                cliente fetch tipado (ApiError, 401 -> cierra sesión), tipos y servicios
     cart/               lógica pura del carrito (reducer) con pruebas
     format.ts           dinero en centavos, fechas, estados
+    use-debounced.ts    hook compartido de busqueda con retraso
 ```
+
+Reglas de código: cada pantalla (`page.tsx`) solo compone; la lógica va en un hook `use-*.ts` y el marcado largo en subcomponentes. Ningún componente pasa de 60 líneas ni un archivo de 300.
 
 Decisiones:
 - **Dinero en centavos** de punta a punta; `parseMoneyToCents` evita errores de punto flotante.

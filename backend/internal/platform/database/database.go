@@ -58,35 +58,40 @@ func Migrate(ctx context.Context, pool *pgxpool.Pool, log *slog.Logger) error {
 		if e.IsDir() || len(name) < 5 || name[len(name)-4:] != ".sql" {
 			continue
 		}
-		var applied bool
-		if err := pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM schema_migrations WHERE version = $1)`, name).Scan(&applied); err != nil {
+		applied, err := applyMigration(ctx, pool, name)
+		if err != nil {
 			return err
 		}
 		if applied {
-			continue
+			log.Info("migracion aplicada", "version", name)
 		}
-		script, err := fs.ReadFile(migrations.FS, name)
-		if err != nil {
-			return err
-		}
-		tx, err := pool.Begin(ctx)
-		if err != nil {
-			return err
-		}
-		if _, err := tx.Exec(ctx, string(script)); err != nil {
-			_ = tx.Rollback(ctx)
-			return fmt.Errorf("migracion %s: %w", name, err)
-		}
-		if _, err := tx.Exec(ctx, `INSERT INTO schema_migrations (version) VALUES ($1)`, name); err != nil {
-			_ = tx.Rollback(ctx)
-			return err
-		}
-		if err := tx.Commit(ctx); err != nil {
-			return err
-		}
-		log.Info("migracion aplicada", "version", name)
 	}
 	return nil
+}
+
+// applyMigration ejecuta un script y lo registra en una transaccion.
+// Devuelve false si ya estaba aplicado.
+func applyMigration(ctx context.Context, pool *pgxpool.Pool, name string) (bool, error) {
+	var done bool
+	if err := pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM schema_migrations WHERE version = $1)`, name).Scan(&done); err != nil || done {
+		return false, err
+	}
+	script, err := fs.ReadFile(migrations.FS, name)
+	if err != nil {
+		return false, err
+	}
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		return false, err
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck
+	if _, err := tx.Exec(ctx, string(script)); err != nil {
+		return false, fmt.Errorf("migracion %s: %w", name, err)
+	}
+	if _, err := tx.Exec(ctx, `INSERT INTO schema_migrations (version) VALUES ($1)`, name); err != nil {
+		return false, err
+	}
+	return true, tx.Commit(ctx)
 }
 
 // MapError traduce errores de pgx/PostgreSQL a errores de negocio.

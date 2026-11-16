@@ -1,6 +1,9 @@
 import clsx from "clsx";
 import type { ReactNode } from "react";
-import { Card } from "@/components/ui/misc";
+import { errorMessage } from "@/lib/api/client";
+import { Card } from "@/components/ui/card";
+import { PageLoader } from "@/components/ui/spinner";
+import { ErrorState } from "@/components/ui/states";
 
 export function PageHeader({ title, description, actions }: { title: string; description?: string; actions?: ReactNode }) {
   return (
@@ -45,3 +48,30 @@ export function Table({ headers, children }: { headers: { label: string; classNa
 }
 
 export const td = "px-4 py-3 align-middle";
+
+export function SearchInput({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+  return (
+    <input
+      type="search"
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      placeholder="Buscar por nombre o SKU"
+      aria-label="Buscar productos"
+      className="mb-4 h-10 w-full max-w-sm rounded-lg border border-slate-300 bg-white px-3 text-sm"
+    />
+  );
+}
+
+interface QueryViewProps {
+  query: { isLoading: boolean; isError: boolean; error: unknown; refetch: () => unknown };
+  /** Se muestra cuando la consulta termino sin resultados. */
+  empty: ReactNode | false;
+  children: ReactNode;
+}
+
+/** Muestra cargando / error / vacio / contenido segun el estado de una consulta. */
+export function QueryView({ query, empty, children }: QueryViewProps) {
+  if (query.isLoading) return <PageLoader />;
+  if (query.isError) return <ErrorState message={errorMessage(query.error)} onRetry={() => query.refetch()} />;
+  return <>{empty || children}</>;
+}

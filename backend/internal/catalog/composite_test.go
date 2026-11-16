@@ -4,11 +4,11 @@ import "testing"
 
 func buildTree(t *testing.T) (*Bundle, StockView) {
 	t.Helper()
-	mouse := NewSimple("mouse", "MS-1", "Mouse", 2000)
-	teclado := NewSimple("teclado", "KB-1", "Teclado", 5000)
-	pad := NewSimple("pad", "PD-1", "Pad", 1000)
+	mouse := NewSimple(Info{"mouse", "MS-1", "Mouse"}, 2000)
+	teclado := NewSimple(Info{"teclado", "KB-1", "Teclado"}, 5000)
+	pad := NewSimple(Info{"pad", "PD-1", "Pad"}, 1000)
 
-	kit, _ := NewBundle("kit", "KIT-1", "Kit escritorio", 10)
+	kit, _ := NewBundle(Info{"kit", "KIT-1", "Kit escritorio"}, 10)
 	if err := kit.Add(mouse, 1); err != nil {
 		t.Fatal(err)
 	}
@@ -17,7 +17,7 @@ func buildTree(t *testing.T) (*Bundle, StockView) {
 	}
 
 	// Combo dentro de combo.
-	pro, _ := NewBundle("pro", "PRO-1", "Pack pro", 0)
+	pro, _ := NewBundle(Info{"pro", "PRO-1", "Pack pro"}, 0)
 	_ = pro.Add(kit, 2)
 	_ = pro.Add(pad, 1)
 
@@ -25,7 +25,7 @@ func buildTree(t *testing.T) (*Bundle, StockView) {
 }
 
 func TestSimpleLeaf(t *testing.T) {
-	p := NewSimple("a", "A", "A", 1500)
+	p := NewSimple(Info{"a", "A", "A"}, 1500)
 	if p.Price() != 1500 || p.Available(StockView{"a": 7}) != 7 {
 		t.Fatal("hoja devuelve valores incorrectos")
 	}
@@ -59,11 +59,11 @@ func TestBundleRequirementsFlattenNestedBundles(t *testing.T) {
 }
 
 func TestBundleValidation(t *testing.T) {
-	if _, err := NewBundle("x", "X", "X", 150); err == nil {
+	if _, err := NewBundle(Info{"x", "X", "X"}, 150); err == nil {
 		t.Fatal("debio rechazar descuento > 100")
 	}
-	b, _ := NewBundle("x", "X", "X", 0)
-	if err := b.Add(NewSimple("a", "A", "A", 1), 0); err == nil {
+	b, _ := NewBundle(Info{"x", "X", "X"}, 0)
+	if err := b.Add(NewSimple(Info{"a", "A", "A"}, 1), 0); err == nil {
 		t.Fatal("debio rechazar cantidad 0")
 	}
 	if b.Available(StockView{}) != 0 {

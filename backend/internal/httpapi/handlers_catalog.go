@@ -36,12 +36,12 @@ func (a *API) listProducts(w http.ResponseWriter, r *http.Request) {
 		Limit:           limit,
 		Offset:          offset,
 	})
-	respond(a, w, http.StatusOK, recs, err)
+	a.ok(w, recs, err)
 }
 
 func (a *API) getProduct(w http.ResponseWriter, r *http.Request) {
 	d, err := a.Catalog.Detail(r.Context(), r.PathValue("id"), isAdmin(r))
-	respond(a, w, http.StatusOK, d, err)
+	a.ok(w, d, err)
 }
 
 func (a *API) createProduct(w http.ResponseWriter, r *http.Request) {
@@ -50,7 +50,7 @@ func (a *API) createProduct(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	rec, err := a.Catalog.CreateSimple(r.Context(), in)
-	respond(a, w, http.StatusCreated, rec, err)
+	a.created(w, rec, err)
 }
 
 func (a *API) updateProduct(w http.ResponseWriter, r *http.Request) {
@@ -59,7 +59,7 @@ func (a *API) updateProduct(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	rec, err := a.Catalog.Update(r.Context(), r.PathValue("id"), in)
-	respond(a, w, http.StatusOK, rec, err)
+	a.ok(w, rec, err)
 }
 
 func (a *API) createBundle(w http.ResponseWriter, r *http.Request) {
@@ -68,12 +68,12 @@ func (a *API) createBundle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	rec, err := a.Catalog.CreateBundle(r.Context(), in)
-	respond(a, w, http.StatusCreated, rec, err)
+	a.created(w, rec, err)
 }
 
 func (a *API) listCategories(w http.ResponseWriter, r *http.Request) {
 	cats, err := a.Catalog.ListCategories(r.Context())
-	respond(a, w, http.StatusOK, cats, err)
+	a.ok(w, cats, err)
 }
 
 func (a *API) createCategory(w http.ResponseWriter, r *http.Request) {
@@ -84,5 +84,5 @@ func (a *API) createCategory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	c, err := a.Catalog.CreateCategory(r.Context(), in.Name)
-	respond(a, w, http.StatusCreated, c, err)
+	a.created(w, c, err)
 }

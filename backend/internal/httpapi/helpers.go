@@ -9,12 +9,27 @@ import (
 	"ecommerce/internal/apperr"
 )
 
-func respond(a *API, w http.ResponseWriter, okStatus int, body any, err error) {
+// ok responde 200 con body, o el error traducido a su codigo HTTP.
+func (a *API) ok(w http.ResponseWriter, body any, err error) {
+	a.reply(w, reply{status: http.StatusOK, body: body}, err)
+}
+
+// created responde 201 con el recurso creado, o el error.
+func (a *API) created(w http.ResponseWriter, body any, err error) {
+	a.reply(w, reply{status: http.StatusCreated, body: body}, err)
+}
+
+type reply struct {
+	status int
+	body   any
+}
+
+func (a *API) reply(w http.ResponseWriter, r reply, err error) {
 	if err != nil {
 		a.writeError(w, err)
 		return
 	}
-	writeJSON(w, okStatus, body)
+	writeJSON(w, r.status, r.body)
 }
 
 func (a *API) writeError(w http.ResponseWriter, err error) {

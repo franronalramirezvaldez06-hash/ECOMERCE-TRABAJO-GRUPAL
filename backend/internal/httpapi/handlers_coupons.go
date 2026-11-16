@@ -11,7 +11,7 @@ import (
 
 func (a *API) listCoupons(w http.ResponseWriter, r *http.Request) {
 	cs, err := a.Coupons.List(r.Context())
-	respond(a, w, http.StatusOK, cs, err)
+	a.ok(w, cs, err)
 }
 
 func (a *API) createCoupon(w http.ResponseWriter, r *http.Request) {
@@ -20,7 +20,7 @@ func (a *API) createCoupon(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	c, err := a.Coupons.Create(r.Context(), in)
-	respond(a, w, http.StatusCreated, c, err)
+	a.created(w, c, err)
 }
 
 func (a *API) setCouponActive(w http.ResponseWriter, r *http.Request) {
@@ -35,5 +35,5 @@ func (a *API) setCouponActive(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	err := a.Coupons.SetActive(r.Context(), r.PathValue("code"), *in.Active)
-	respond(a, w, http.StatusOK, map[string]any{"code": r.PathValue("code"), "active": *in.Active}, err)
+	a.ok(w, map[string]any{"code": r.PathValue("code"), "active": *in.Active}, err)
 }

@@ -10,7 +10,9 @@ import { ApiError, errorMessage } from "@/lib/api/client";
 import { useToast } from "@/providers/toast-provider";
 import { RequireAuth } from "@/components/auth/guards";
 import { Button, LinkButton } from "@/components/ui/button";
-import { ConfirmDialog, EmptyState, ErrorState, PageLoader } from "@/components/ui/misc";
+import { ConfirmDialog } from "@/components/ui/modal";
+import { PageLoader } from "@/components/ui/spinner";
+import { EmptyState, ErrorState } from "@/components/ui/states";
 import { OrderDetail } from "@/components/shop/order-detail";
 
 function OrderView() {

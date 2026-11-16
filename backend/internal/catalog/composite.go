@@ -37,6 +37,13 @@ type Component interface {
 	Children() []Entry
 }
 
+// Info son los datos de identidad que comparten hojas y combos.
+type Info struct{ id, sku, name string }
+
+func (i Info) ID() string   { return i.id }
+func (i Info) SKU() string  { return i.sku }
+func (i Info) Name() string { return i.name }
+
 // Entry es un hijo de un combo con su cantidad.
 type Entry struct {
 	Component Component
@@ -47,37 +54,34 @@ type Entry struct {
 
 // Simple es la hoja del arbol: un producto individual.
 type Simple struct {
-	id, sku, name string
-	priceCents    int64
+	Info
+	priceCents int64
 }
 
-func NewSimple(id, sku, name string, priceCents int64) *Simple {
-	return &Simple{id: id, sku: sku, name: name, priceCents: priceCents}
+func NewSimple(info Info, priceCents int64) *Simple {
+	return &Simple{Info: info, priceCents: priceCents}
 }
 
-func (p *Simple) ID() string                              { return p.id }
-func (p *Simple) SKU() string                             { return p.sku }
-func (p *Simple) Name() string                            { return p.name }
-func (p *Simple) Kind() string                            { return KindSimple }
-func (p *Simple) Price() int64                            { return p.priceCents }
-func (p *Simple) Available(stock StockView) int           { return stock[p.id] }
-func (p *Simple) Requirements(qty int) map[string]int     { return map[string]int{p.id: qty} }
-func (p *Simple) Children() []Entry                       { return nil }
+func (p *Simple) Kind() string                        { return KindSimple }
+func (p *Simple) Price() int64                        { return p.priceCents }
+func (p *Simple) Available(stock StockView) int       { return stock[p.id] }
+func (p *Simple) Requirements(qty int) map[string]int { return map[string]int{p.id: qty} }
+func (p *Simple) Children() []Entry                   { return nil }
 
 // ----------------------------------------------------------- Compuesto
 
 // Bundle es el compuesto: agrupa componentes y aplica un descuento propio.
 type Bundle struct {
-	id, sku, name string
-	discountPct   int
-	entries       []Entry
+	Info
+	discountPct int
+	entries     []Entry
 }
 
-func NewBundle(id, sku, name string, discountPct int) (*Bundle, error) {
+func NewBundle(info Info, discountPct int) (*Bundle, error) {
 	if discountPct < 0 || discountPct > 100 {
 		return nil, fmt.Errorf("descuento de combo invalido: %d", discountPct)
 	}
-	return &Bundle{id: id, sku: sku, name: name, discountPct: discountPct}, nil
+	return &Bundle{Info: info, discountPct: discountPct}, nil
 }
 
 // Add agrega un componente (simple o combo) con su cantidad.
@@ -92,10 +96,7 @@ func (b *Bundle) Add(c Component, qty int) error {
 	return nil
 }
 
-func (b *Bundle) ID() string       { return b.id }
-func (b *Bundle) SKU() string      { return b.sku }
-func (b *Bundle) Name() string     { return b.name }
-func (b *Bundle) Kind() string     { return KindBundle }
+func (b *Bundle) Kind() string      { return KindBundle }
 func (b *Bundle) Children() []Entry { return b.entries }
 
 // Price suma los hijos (recursivo) y aplica el descuento del combo.
